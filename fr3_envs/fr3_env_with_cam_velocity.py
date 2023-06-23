@@ -22,7 +22,7 @@ class FR3CameraSim(Env):
         "render_modes": ["human", "rgb_array"],
     }
 
-    def __init__(self, render_mode: Optional[str] = None, record_path=None):
+    def __init__(self, camera_config, render_mode: Optional[str] = None, record_path=None):
         if render_mode == "human":
             self.client = p.connect(p.GUI)
             # Improves rendering performance on M1 Macs
@@ -87,23 +87,17 @@ class FR3CameraSim(Env):
         self.jacobian_frame = pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
 
         # Get camera projection matrix
-        self.width = 512
-        self.height = 512
-        fov = 60
+        self.width = camera_config["width"]
+        self.height = camera_config["height"]
+        fov = camera_config["fov"]
         aspect = self.width / self.height
-        near = 0.02
-        far = 1.0
+        near = camera_config["near"]
+        far = camera_config["far"]
+        camera_intrinsic_matrix = np.array(camera_config["intrinsic_matrix"],dtype=np.float32)
+        self.projection_matrix =  cvK2BulletP(camera_intrinsic_matrix, self.width, self.height, near, far)
 
-        self.projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
+        # self.projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
-        # self.width = 512
-        # self.height = 512
-        # fov = 60
-        # aspect = self.width / self.height
-        # near = 0.02
-        # far = 1.0
-
-        # self.projection_matrix = p.cvK2BulletP(fov, aspect, near, far)
 
         # Set observation and action space
         obs_low_q = []
