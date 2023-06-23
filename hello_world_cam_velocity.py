@@ -1,6 +1,8 @@
 import numpy as np
 import numpy.linalg as LA
 from scipy.spatial.transform import Rotation as R
+from PIL import Image
+import matplotlib.pyplot as plt
 
 from fr3_envs.fr3_env_with_cam_velocity import FR3CameraSim
 
@@ -98,10 +100,7 @@ def main():
         K = 10 * np.eye(6)
 
         vel = pinv_jac @ (K@delta_x + dx)
-
-        # Set control for the two fingers to zero
-        # tau[-1] = 0.0
-        # tau[-2] = 0.0
+        vel = np.zeros_like(vel)
 
         # Error rotation matrix
         R_err = _R_end @ R_current.T
@@ -112,6 +111,17 @@ def main():
         # Send joint commands to motor
         if i % 50 == 0:
             info = env.step(vel, return_image=True)
+            rgb_opengl = info["rgb"]
+            depth_buffer_opengl = info["depth"]
+            near = 0.02
+            far = 1.0
+            
+            depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
+            seg_opengl = info["seg"]
+            rgbim = Image.fromarray(rgb_opengl)
+            rgbim_no_alpha = rgbim.convert('RGB')
+            rgbim_no_alpha.save('pics/'+'rgb_'+str(i)+'.jpg')
+            plt.imsave('pics/'+'depth_'+str(i)+'.jpg', depth_buffer_opengl)
         else:
             info = env.step(vel)
 

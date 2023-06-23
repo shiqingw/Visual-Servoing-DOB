@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from helper_functions import getDataPath
-from utils.render_utils import cvPose2BulletView
+from utils.render_utils import cvPose2BulletView, cvK2BulletP
 
 
 class FR3CameraSim(Env):
@@ -26,8 +26,8 @@ class FR3CameraSim(Env):
         if render_mode == "human":
             self.client = p.connect(p.GUI)
             # Improves rendering performance on M1 Macs
-            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-            # p.configureDebugVisualizer(p.COV_ENABLE_GUI, 1)
+            # p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 1)
         else:
             self.client = p.connect(p.DIRECT)
 
@@ -95,6 +95,15 @@ class FR3CameraSim(Env):
         far = 1.0
 
         self.projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
+
+        # self.width = 512
+        # self.height = 512
+        # fov = 60
+        # aspect = self.width / self.height
+        # near = 0.02
+        # far = 1.0
+
+        # self.projection_matrix = p.cvK2BulletP(fov, aspect, near, far)
 
         # Set observation and action space
         obs_low_q = []
@@ -354,9 +363,10 @@ class FR3CameraSim(Env):
                 projectionMatrix=self.projection_matrix,
             )
 
-            rgba_data = img[2]
-            img = np.reshape(rgba_data, (self.height, self.width, 4))
-            info["img"] = img
+            info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
+            info["depth"] = np.reshape(img[3], (self.height, self.width))
+            info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
+
 
         return info
 
