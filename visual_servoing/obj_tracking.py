@@ -2,33 +2,22 @@ import argparse
 import json
 import os
 import shutil
+import apriltag
 
 import numpy as np
 import numpy.linalg as LA
+import pybullet as p
 from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import matplotlib.pyplot as plt
+import cv2
 
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_velocity import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_moving import FR3CameraSim
 
-
-def alpha_func(t, T=5.0):
-    if t <= T:
-        alpha = np.sin((np.pi / 4) * (1 - np.cos(np.pi * t / T)))
-        dalpha = (
-            ((np.pi**2) / (4 * T))
-            * np.cos((np.pi / 4) * (1 - np.cos(np.pi * t / T)))
-            * np.sin(np.pi * t / T)
-        )
-    else:
-        alpha = 1.0
-        dalpha = 0.0
-
-    return alpha, dalpha
 
 
 def axis_angle_from_rot_mat(rot_mat):
@@ -61,85 +50,61 @@ def main():
         test_settings = json.load(f)
 
     camera_config = test_settings["camera_config"]
-    env = FR3CameraSim(render_mode="human", camera_config=camera_config)
+    apriltag_config = test_settings["apriltag_config"]
+    enable_gui_camera_data = test_settings["enable_gui_camera_data"]
+    intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
+
+    env = FR3CameraSim(camera_config, enable_gui_camera_data, render_mode="human")
     info = env.reset()
 
-    p_end = np.array([[0.2], [-0.4], [0.2]])
+    # reset apriltag position
+    april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
+    p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_config["initial_position"], april_tag_quat)
 
-    # get initial rotation and position
-    q, dq, R_start, _p_start = info["q"], info["dq"], info["R_EE"], info["P_EE"]
-    p_start = _p_start[:, np.newaxis]
+    T = test_settings["horizon"]
+    for i in range(T):
+        apriltag_angle = 2*np.pi*i/T
+        apriltag_radius = 0.1
+        apriltag_position = [0.4 + apriltag_radius*np.sin(apriltag_angle), apriltag_radius*np.cos(apriltag_angle), 0.005]
+        p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
 
-    # Get target orientation based on initial orientation
-    _R_end = (
-        R.from_euler("x", 0, degrees=True).as_matrix()
-        @ R.from_euler("z", 90, degrees=True).as_matrix()
-        @ R_start
-    )
-    R_end = R.from_matrix(_R_end).as_matrix()
-    R_error = R_end @ R_start.T
-    axis_error, angle_error = axis_angle_from_rot_mat(R_error)
-
-    for i in range(10000):
-        # Get simulation time
-        sim_time = i * (1 / 240)
-
-        # Compute α and dα
-        alpha, dalpha = alpha_func(sim_time, T=30.0)
-
-        # Compute p_target
-        p_target = p_start + alpha * (p_end - p_start)
-
-        # Compute v_target
-        v_target = dalpha * (p_end - p_start)
-
-        # Compute R_target
-        theta_t = alpha * angle_error
-        R_target = R.from_rotvec(axis_error * theta_t).as_matrix() @ R_start
-
-        # Compute ω_target
-        ω_target = dalpha * axis_error * angle_error
-
-        # Get end-effector position
-        p_current = info["P_EE"][:, np.newaxis]
-
-        # Get end-effector orientation
-        R_current = info["R_EE"]
-
-        # Error rotation matrix
-        R_err = R_target @ R_current.T
-
-        # Orientation error in axis-angle form
-        rotvec_err = R.from_matrix(R_err).as_rotvec()
-
-        # Get pseudo-inverse of frame Jacobian
-        pinv_jac = info["pJ_EE"]
-
-        # Compute controller
-        delta_x = np.zeros((6, 1))
-        delta_x[:3] = p_target - p_current
-        delta_x[3:] = rotvec_err[:, np.newaxis]
-        delta_q = pinv_jac @ delta_x
-
-        dx = np.zeros((6, 1))
-        dx[:3] = v_target
-        dx[3:] = ω_target[:, np.newaxis]
-        delta_dq = pinv_jac @ dx - dq[:, np.newaxis]
-
-        K = 10 * np.eye(6)
-
-        vel = pinv_jac @ (K@delta_x + dx)
-        vel = np.zeros_like(vel)
-
-        # Error rotation matrix
-        R_err = _R_end @ R_current.T
-
-        # Orientation error in axis-angle form
-        rotvec_err = R.from_matrix(R_err).as_rotvec()
-
-        # Send joint commands to motor
-        if i % 50 == 0:
+        J_camera = info["J_CAMERA"]
+        if i % 100 == 0:
+            vel = np.zeros([np.shape(J_camera)[1], 1], dtype=np.float32)
             info = env.step(vel, return_image=True)
+
+            rgb_opengl = info["rgb"]
+            img = 0.2125*rgb_opengl[:,:,0] + 0.7154*rgb_opengl[:,:,1] + 0.0721*rgb_opengl[:,:,2]
+            img = img.astype(np.uint8)
+            detector = apriltag.Detector()
+            result = detector.detect(img)
+            corners = result[0].corners
+
+            depth_buffer_opengl = info["depth"]
+            near = camera_config["near"]
+            far = camera_config["far"]
+            depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
+            
+            corner_depths = np.zeros([corners.shape[0],1], dtype=np.float32)
+            for ii in range(len(corners)):
+                x, y = corners[ii,:]
+                corner_depths[ii] = depth_opengl[int(y), int(x)]
+            
+            pixel_coord = np.hstack((corners, np.ones((corners.shape[0],1), dtype=np.float32)))
+            pixel_coord_denomalized = pixel_coord*corner_depths
+            
+            coord_in_cam = pixel_coord_denomalized @ LA.inv(intrinsic_matrix.T)
+            coord_in_cam = np.hstack((coord_in_cam, np.ones((coord_in_cam.shape[0],1), dtype=np.float32)))
+            # print(coord_in_cam)
+
+            _H = np.hstack((info["R_CAMERA"], np.reshape(info["P_CAMERA"],(3,1))))
+            H = np.vstack((_H, np.array([[0.0, 0.0, 0.0, 1.0]])))
+
+            coord_in_world = coord_in_cam @ H.T
+            # print(coord_in_world)
+
+            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]
@@ -148,22 +113,21 @@ def main():
                 rgbim_no_alpha.save(results_dir+'/rgb_'+str(i)+'.{}'.format(test_settings["image_save_format"]))
 
             if test_settings["save_depth"] == "true":
-                depth_buffer_opengl = info["depth"]
-                near = camera_config["near"]
-                far = camera_config["far"]
-                depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
                 plt.imsave(results_dir+'/depth_'+str(i)+'.{}'.format(test_settings["image_save_format"]), depth_opengl)
+
+            if test_settings["save_detection"] == "true":
+                for ii in range(len(corners)):
+                    x, y = corners[ii,:]
+                    img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
+
         else:
             info = env.step(vel)
 
         q, dq = info["q"], info["dq"]
 
         if i % 500 == 0:
-            print(
-                "Iter {:.2e} \t ǁeₒǁ₂: {:.2e} \t ǁeₚǁ₂: {:.2e}".format(
-                    i, LA.norm(rotvec_err), LA.norm(p_end - p_current)
-                ),
-            )
+            print("Iter {:.2e}".format(i))
 
     env.close()
 
