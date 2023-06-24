@@ -103,8 +103,8 @@ def main():
             coord_in_world = coord_in_cam @ H.T
             # print(coord_in_world)
 
-            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+            colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+            p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]

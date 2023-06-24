@@ -1,0 +1,22 @@
+{
+    "image_save_format": "png",
+    "save_rgb": "false",
+    "save_depth": "false",
+    "save_detection": "true",
+    "enable_gui_camera_data": 0,
+    "horizon": 10000,
+
+    "camera_config":{
+        "width": 400,
+        "height": 400,
+        "near": 0.02,
+        "far": 1.0,
+        "fov": 60,
+        "intrinsic_matrix": [[300,0,200],[0,300,200],[0,0,1]]
+    },
+
+    "apriltag_config":{
+        "initial_position": [0.4, 0.1, 0.005],
+        "if_moving": "false"
+    }
+}

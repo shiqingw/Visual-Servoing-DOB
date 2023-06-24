@@ -4,7 +4,7 @@
     "save_depth": "false",
     "save_detection": "true",
     "enable_gui_camera_data": 0,
-    "horizon": 100000,
+    "horizon": 10000,
 
     "camera_config":{
         "width": 400,
