@@ -2,7 +2,7 @@
     "image_save_format": "png",
     "save_rgb": "false",
     "save_depth": "false",
-    "save_detection": "true",
+    "save_detection": "false",
     "enable_gui_camera_data": 0,
     "horizon": 10000,
 

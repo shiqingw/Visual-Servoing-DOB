@@ -79,6 +79,7 @@ def main():
             detector = apriltag.Detector()
             result = detector.detect(img)
             corners = result[0].corners
+            # print(corners)
 
             depth_buffer_opengl = info["depth"]
             near = camera_config["near"]
@@ -95,7 +96,6 @@ def main():
             
             coord_in_cam = pixel_coord_denomalized @ LA.inv(intrinsic_matrix.T)
             coord_in_cam = np.hstack((coord_in_cam, np.ones((coord_in_cam.shape[0],1), dtype=np.float32)))
-            # print(coord_in_cam)
 
             _H = np.hstack((info["R_CAMERA"], np.reshape(info["P_CAMERA"],(3,1))))
             H = np.vstack((_H, np.array([[0.0, 0.0, 0.0, 1.0]])))
@@ -128,6 +128,7 @@ def main():
 
         if i % 500 == 0:
             print("Iter {:.2e}".format(i))
+        
 
     env.close()
 
