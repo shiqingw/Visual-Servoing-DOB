@@ -167,6 +167,21 @@ class FR3CameraSim(Env):
             self.loggingId = p.startStateLogging(
                 p.STATE_LOGGING_VIDEO_MP4, self.record_path
             )
+       
+        R_camera = info["R_CAMERA"]
+        q = Rotation.from_matrix(R_camera).as_quat()
+        view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
+        
+        img = p.getCameraImage(
+            self.width,
+            self.height,
+            viewMatrix=view_matrix,
+            projectionMatrix=self.projection_matrix
+        )
+
+        info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
+        info["depth"] = np.reshape(img[3], (self.height, self.width))
+        # info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
 
         return info
 

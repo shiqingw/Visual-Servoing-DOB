@@ -28,6 +28,22 @@ def axis_angle_from_rot_mat(rot_mat):
 
     return axis, angle
 
+def one_point_image_jacobian(coord_in_cam, fx, fy):
+    X = coord_in_cam[0]
+    Y = coord_in_cam[1]
+    Z = coord_in_cam[2]
+    J1 = np.array([-fx/Z, 0, fx*X/Z**2, fx*X*Y/Z**2, fx*(-1-X**2/Z**2), fx*Y/Z], dtype=np.float32)
+    J2 = np.array([0, -fy/Z, fy*Y/Z**2, fy*(1+Y**2/Z**2), -fy*X*Y/Z**2, -fy*X/Z], dtype=np.float32)
+
+    return np.vstack((J1, J2))
+
+def skew(x):
+    return np.array([[0, -x[2], x[1]],
+                     [x[2], 0, -x[0]],
+                     [-x[1], x[0], 0]], dtype=np.float32)
+
+def skew_to_vector(S):
+    return np.array([S[2,1], S[0,2], S[1,0]], dtype=np.float32)
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
@@ -51,6 +67,7 @@ def main():
 
     camera_config = test_settings["camera_config"]
     apriltag_config = test_settings["apriltag_config"]
+    controller_config = test_settings["controller_config"]
     enable_gui_camera_data = test_settings["enable_gui_camera_data"]
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
 
@@ -79,7 +96,6 @@ def main():
             detector = apriltag.Detector()
             result = detector.detect(img)
             corners = result[0].corners
-            # print(corners)
 
             depth_buffer_opengl = info["depth"]
             near = camera_config["near"]
@@ -105,6 +121,38 @@ def main():
 
             colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+
+            # Compute image jaccobian due to camera speed
+            J_image_cam = np.zeros((2*corners.shape[0], 6), dtype=np.float32)
+            fx = intrinsic_matrix[0, 0]
+            fy = intrinsic_matrix[1, 1]
+            for ii in range(len(corners)):
+                J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
+            
+            # Compute desired pixel velocity
+            gain = controller_config["keep_in_center_gain"]
+            x0 = intrinsic_matrix[0, 2]
+            y0 = intrinsic_matrix[1, 2]
+            xd = -gain/len(corners)*(np.mean(corners[:,0]) - x0)*np.ones_like(corners[:,0])
+            yd = -gain/len(corners)*(np.mean(corners[:,1]) - y0)*np.ones_like(corners[:,1])
+
+            # Map to the camera speed expressed in the camera frame
+            xd_yd = np.empty((len(corners)*2), dtype=np.float32)
+            xd_yd[0::2] = xd
+            xd_yd[1::2] = yd
+            speeds_in_cam = np.linalg.pinv(J_image_cam) @ xd_yd
+
+            # Transform the speed back to the world frame
+            v_in_cam = speeds_in_cam[0:3]
+            omega_in_cam = speeds_in_cam[3:6]
+            R_cam_to_world = info["R_CAMERA"]
+            v_in_world = R_cam_to_world @ v_in_cam
+            S_in_world = R_cam_to_world @ skew(omega_in_cam) @ R_cam_to_world.T
+            omega_in_world = skew_to_vector(S_in_world)
+            
+            # Map the desired camera speed to joint velocities
+            J_camera = info["J_CAMERA"]
+            vel = np.linalg.pinv(J_camera) @ np.concatenate((v_in_world, omega_in_world))
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]

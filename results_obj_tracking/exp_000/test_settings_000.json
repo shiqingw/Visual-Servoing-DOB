@@ -18,5 +18,9 @@
     "apriltag_config":{
         "initial_position": [0.4, 0.1, 0.005],
         "if_moving": "false"
+    },
+
+    "controller_config":{
+        "keep_in_center_gain": 10
     }
 }
