@@ -80,7 +80,8 @@ def main():
 
     T = test_settings["horizon"]
     for i in range(T):
-        apriltag_angle = 2*np.pi*i/T
+        circular_speed = apriltag_config["circular_speed"]
+        apriltag_angle = circular_speed*2*np.pi*i/T
         apriltag_radius = 0.1
         apriltag_position = [0.4 + apriltag_radius*np.sin(apriltag_angle), apriltag_radius*np.cos(apriltag_angle), 0.005]
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
@@ -128,7 +129,8 @@ def main():
             fy = intrinsic_matrix[1, 1]
             for ii in range(len(corners)):
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
-            
+            # print("Rank of J_image_cam: ", LA.matrix_rank(J_image_cam))
+
             # Compute desired pixel velocity
             gain = controller_config["keep_in_center_gain"]
             x0 = intrinsic_matrix[0, 2]
@@ -140,7 +142,7 @@ def main():
             xd_yd = np.empty((len(corners)*2), dtype=np.float32)
             xd_yd[0::2] = xd
             xd_yd[1::2] = yd
-            speeds_in_cam = np.linalg.pinv(J_image_cam) @ xd_yd
+            speeds_in_cam = LA.pinv(J_image_cam) @ xd_yd
 
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]
@@ -152,7 +154,8 @@ def main():
             
             # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
-            vel = np.linalg.pinv(J_camera) @ np.concatenate((v_in_world, omega_in_world))
+            vel = LA.pinv(J_camera) @ np.concatenate((v_in_world, omega_in_world))
+            # print("Rank of J_camera: ", LA.matrix_rank(J_camera))
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]

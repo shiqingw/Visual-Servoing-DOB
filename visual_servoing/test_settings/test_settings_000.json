@@ -3,7 +3,7 @@
     "save_rgb": "false",
     "save_depth": "false",
     "save_detection": "false",
-    "enable_gui_camera_data": 0,
+    "enable_gui_camera_data": 1,
     "horizon": 10000,
 
     "camera_config":{
@@ -17,7 +17,7 @@
 
     "apriltag_config":{
         "initial_position": [0.4, 0.1, 0.005],
-        "if_moving": "false"
+        "circular_speed": 2
     },
 
     "controller_config":{

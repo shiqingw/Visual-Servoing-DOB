@@ -416,12 +416,21 @@
     </inertial>
     <!-- <visual>
       <geometry>
-        <mesh filename="package://robots/meshes/visual/d435i_reduced.obj"/>
+        <box size="0.1 0.1 0.1"/>
       </geometry>
       <material name="panda_white">
         <color rgba="1. 1. 1. 1."/>
       </material>
     </visual> -->
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.01"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/d435i_reduced.obj"/>
+      </geometry>
+      <material name="panda_white">
+        <color rgba="1. 1. 1. 1."/>
+      </material>
+    </visual>
   </link>
 
   <joint name="fr3_hand_camera_joint" type="fixed">
