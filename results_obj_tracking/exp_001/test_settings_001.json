@@ -23,6 +23,6 @@
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [1.0,1.0],
-        "variance_target": [1550, 1550]
+        "variance_target": [3000, 3000]
     }
 }

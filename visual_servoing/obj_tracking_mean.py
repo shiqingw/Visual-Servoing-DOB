@@ -131,18 +131,16 @@ def main():
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
             # print("Rank of J_image_cam: ", LA.matrix_rank(J_image_cam))
 
-            # Compute desired pixel velocity
-            gain = controller_config["keep_in_center_gain"]
+            # Compute desired pixel velocity (mean)
+            mean_gain = np.diag(controller_config["mean_gain"])
             x0 = intrinsic_matrix[0, 2]
             y0 = intrinsic_matrix[1, 2]
-            xd = -gain/len(corners)*(np.mean(corners[:,0]) - x0)*np.ones_like(corners[:,0])
-            yd = -gain/len(corners)*(np.mean(corners[:,1]) - y0)*np.ones_like(corners[:,1])
+            J_mean = 1/len(corners)*np.tile(np.eye(2), len(corners))
+            error_mean = np.mean(corners, axis=0) - [x0,y0]
+            xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Map to the camera speed expressed in the camera frame
-            xd_yd = np.empty((len(corners)*2), dtype=np.float32)
-            xd_yd[0::2] = xd
-            xd_yd[1::2] = yd
-            speeds_in_cam = LA.pinv(J_image_cam) @ xd_yd
+            speeds_in_cam = LA.pinv(J_image_cam) @ xd_yd_mean
 
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]

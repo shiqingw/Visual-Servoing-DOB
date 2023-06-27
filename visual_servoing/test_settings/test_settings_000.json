@@ -16,11 +16,13 @@
     },
 
     "apriltag_config":{
-        "initial_position": [0.4, 0.1, 0.005],
+        "initial_position": [0.4, 1.0, 0.005],
         "circular_speed": 2
     },
 
     "controller_config":{
-        "keep_in_center_gain": 10
+        "mean_gain": [1.0,1.0],
+        "variance_gain": [1.0,1.0],
+        "variance_target": [1550, 1550]
     }
 }
