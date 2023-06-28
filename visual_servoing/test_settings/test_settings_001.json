@@ -3,7 +3,7 @@
     "save_rgb": "false",
     "save_depth": "false",
     "save_detection": "false",
-    "enable_gui_camera_data": 0,
+    "enable_gui_camera_data": 1,
     "horizon": 2000,
     "step_every": 8,
 

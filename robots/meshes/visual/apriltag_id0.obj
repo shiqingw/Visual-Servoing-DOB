@@ -1,6 +1,6 @@
 # Blender 3.5.1
 # www.blender.org
-mtllib april_tag.mtl
+mtllib apriltag_id0.mtl
 o Cube
 v -0.085000 -0.110000 0.005000
 v -0.085000 0.110000 0.005000

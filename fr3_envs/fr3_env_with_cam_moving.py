@@ -53,7 +53,7 @@ class FR3CameraSim(Env):
         self.robotID = p.loadURDF("{}.urdf".format(model_name), useFixedBase=True)
 
         # Load AprilTag board
-        self.april_tag_ID = p.loadURDF("april_tag.urdf", useFixedBase=True)
+        self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
         # april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
         # p.resetBasePositionAndOrientation(
         #     self.april_tag_ID, [0.35, 0.0, 0.005], april_tag_quat
