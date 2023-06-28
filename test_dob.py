@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 a = -0.1
 dt = 0.01
-N = 10000
+N = 1000
 x = 1
 t = 0
 disturbance = lambda t: np.sin(t)
@@ -29,7 +29,8 @@ for i in range(N):
     d_list.append(disturbance(t))
     d_hat_list.append(d_hat)
 
-plt.plot(times, d_list, label="true_d")
-plt.plot(times, d_hat_list, label="d_hat")
+# plt.plot(times, d_list, label="true_d")
+# plt.plot(times, d_hat_list, label="d_hat")
+plt.plot(times, np.array(d_list) - np.array(d_hat_list))
 plt.legend()
 plt.show()

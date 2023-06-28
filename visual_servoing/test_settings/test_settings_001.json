@@ -3,8 +3,9 @@
     "save_rgb": "false",
     "save_depth": "false",
     "save_detection": "false",
-    "enable_gui_camera_data": 1,
-    "horizon": 10000,
+    "enable_gui_camera_data": 0,
+    "horizon": 2000,
+    "step_every": 8,
 
     "camera_config":{
         "width": 400,
@@ -16,13 +17,20 @@
     },
 
     "apriltag_config":{
-        "initial_position": [0.4, 1.0, 0.005],
-        "circular_speed": 2
+        "apriltag_radius": 0.1,
+        "initial_position": [0.6, 0.0, 0.005],
+        "center_position": [0.5, 0.0, 0.005],
+        "augular_velocity": 1
     },
 
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [1.0,1.0],
-        "variance_target": [1550, 1550]
+        "variance_target": [4000, 4000]
+    },
+
+    "observer_config":{
+        "gain": [2,2],
+        "num_points": 4
     }
 }

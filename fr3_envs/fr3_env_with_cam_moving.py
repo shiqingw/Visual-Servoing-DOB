@@ -54,11 +54,10 @@ class FR3CameraSim(Env):
 
         # Load AprilTag board
         self.april_tag_ID = p.loadURDF("april_tag.urdf", useFixedBase=True)
-        april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
-
-        p.resetBasePositionAndOrientation(
-            self.april_tag_ID, [0.35, 0.0, 0.005], april_tag_quat
-        )
+        # april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
+        # p.resetBasePositionAndOrientation(
+        #     self.april_tag_ID, [0.35, 0.0, 0.005], april_tag_quat
+        # )
 
         # Build pin_robot
         self.robot = RobotWrapper.BuildFromURDF(robot_URDF, package_directory)
@@ -354,18 +353,6 @@ class FR3CameraSim(Env):
         info = self.get_info(q, dq)
 
         if return_image:
-            # R_camera = (
-            #     info["R_CAMERA"]
-            #     @ np.array(
-            #         [
-            #             [1.0, 0.0, 0.0],
-            #             [0.0, 0.0017453, 0.9999985],
-            #             [0.0, -0.9999985, 0.0017453],
-            #         ]
-            #     )
-            #     @ np.array([[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]])
-            # )
-
             R_camera = info["R_CAMERA"]
             q = Rotation.from_matrix(R_camera).as_quat()
             view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
@@ -380,6 +367,28 @@ class FR3CameraSim(Env):
             info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
             info["depth"] = np.reshape(img[3], (self.height, self.width))
             # info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
+
+        return info
+    
+    def get_image(self):
+
+        q, dq = self.get_state_update_pinocchio()
+        info = self.get_info(q, dq)
+
+        R_camera = info["R_CAMERA"]
+        q = Rotation.from_matrix(R_camera).as_quat()
+        view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
+        
+        img = p.getCameraImage(
+            self.width,
+            self.height,
+            viewMatrix=view_matrix,
+            projectionMatrix=self.projection_matrix
+        )
+
+        info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
+        info["depth"] = np.reshape(img[3], (self.height, self.width))
+        # info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
 
         return info
 

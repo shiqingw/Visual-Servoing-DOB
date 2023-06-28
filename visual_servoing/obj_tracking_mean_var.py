@@ -9,6 +9,8 @@ import numpy.linalg as LA
 import pybullet as p
 from scipy.spatial.transform import Rotation as R
 from PIL import Image
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 
@@ -17,8 +19,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from fr3_envs.fr3_env_with_cam_moving import FR3CameraSim
-
-
+from utils.dict_utils import save_dict
+from configuration import Configuration
 
 def axis_angle_from_rot_mat(rot_mat):
     rotation = R.from_matrix(rot_mat)
@@ -47,7 +49,7 @@ def skew_to_vector(S):
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=0, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -62,6 +64,8 @@ def main():
         os.mkdir(results_dir)
     shutil.copy(test_settings_path, results_dir)
 
+    config = Configuration()
+
     with open(test_settings_path, "r", encoding="utf8") as f:
         test_settings = json.load(f)
 
@@ -71,26 +75,34 @@ def main():
     enable_gui_camera_data = test_settings["enable_gui_camera_data"]
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
 
+    # Create and reset simulation
     env = FR3CameraSim(camera_config, enable_gui_camera_data, render_mode="human")
     info = env.reset()
 
-    # reset apriltag position
+    # Reset apriltag position
     april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
     p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_config["initial_position"], april_tag_quat)
+    info = env.get_image()
 
+    # Records
+    dt = 1.0/240
     T = test_settings["horizon"]
+    step_every = test_settings["step_every"]
+    num_data = (T-1)//step_every + 1
+    times = np.zeros(num_data, dtype = np.float32)
+    mean_errs = np.zeros((num_data,2), dtype = np.float32)
+    variance_errs = np.zeros((num_data,2), dtype = np.float32)
+
     for i in range(T):
-        circular_speed = apriltag_config["circular_speed"]
-        apriltag_angle = circular_speed*2*np.pi*i/T
-        apriltag_radius = 0.1
-        apriltag_position = [0.4 + apriltag_radius*np.sin(apriltag_angle), apriltag_radius*np.cos(apriltag_angle), 0.005]
+        augular_velocity = apriltag_config["augular_velocity"]
+        apriltag_angle = augular_velocity*i*dt
+        apriltag_radius = apriltag_config["apriltag_radius"]
+        apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
-
+        
         J_camera = info["J_CAMERA"]
-        if i % 100 == 0:
-            vel = np.zeros([np.shape(J_camera)[1], 1], dtype=np.float32)
-            info = env.step(vel, return_image=True)
-
+        if i % step_every == 0:
+            info = env.get_image()
             rgb_opengl = info["rgb"]
             img = 0.2125*rgb_opengl[:,:,0] + 0.7154*rgb_opengl[:,:,1] + 0.0721*rgb_opengl[:,:,2]
             img = img.astype(np.uint8)
@@ -128,7 +140,6 @@ def main():
             fy = intrinsic_matrix[1, 1]
             for ii in range(len(corners)):
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
-            # print("Rank of J_image_cam: ", LA.matrix_rank(J_image_cam))
 
             # Compute desired pixel velocity (mean)
             mean_gain = np.diag(controller_config["mean_gain"])
@@ -163,7 +174,14 @@ def main():
             # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
             vel = LA.pinv(J_camera) @ np.concatenate((v_in_world, omega_in_world))
-            # print("Rank of J_camera: ", LA.matrix_rank(J_camera))
+
+            # Step the simulation
+            info = env.step(vel, return_image=False)
+            
+            # Records
+            times[i//step_every] = i*step_every*dt
+            mean_errs[i//step_every,:] = error_mean
+            variance_errs[i//step_every,:] = error_variance
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]
@@ -188,8 +206,30 @@ def main():
         if i % 500 == 0:
             print("Iter {:.2e}".format(i))
         
-
     env.close()
+
+    print("==> Drawing plots ...")
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, mean_errs[:,0], label="x")
+    plt.plot(times, mean_errs[:,1], label="y")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'plot_mean_errs.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, variance_errs[:,0], label="x")
+    plt.plot(times, variance_errs[:,1], label="y")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'plot_variance_errs.png'))
+    plt.close(fig)
+    
+    summary = {'times': times,
+                'mean_errs': mean_errs,
+                'variance_errs': variance_errs}
+    print("==> Saving summary ...")
+    save_dict(summary, os.path.join(results_dir, "summary.npy"))
 
 
 if __name__ == "__main__":
