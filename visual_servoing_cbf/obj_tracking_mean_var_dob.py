@@ -49,6 +49,12 @@ def skew(x):
 def skew_to_vector(S):
     return np.array([S[2,1], S[0,2], S[1,0]], dtype=np.float32)
 
+def point_in_image(x, y, width, height):
+    if (0 <= x and x < width):
+        if (0 <= y and y < height):
+            return True
+    return False
+
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
     parser.add_argument('--exp_num', default=1, type=int, help="test case number")
@@ -101,10 +107,22 @@ def main():
     variance_errs = np.zeros((num_data,2), dtype = np.float32)
     observer_errs = np.zeros(num_data, dtype = np.float32)
 
+    # Obstacle line
+    obstacle_config = test_settings["obstacle_config"]
+    p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
+                       lineToXYZ = obstacle_config["lineToXYZ"],
+                       lineColorRGB = obstacle_config["lineColorRGB"],
+                       lineWidth = obstacle_config["lineWidth"],
+                       lifeTime = obstacle_config["lifeTime"])
+    
+    obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
+    p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
+    p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 1., 1., obstacle_config["obstacle_alpha"]])
+    
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
-        apriltag_angle = augular_velocity*i*dt
+        apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
@@ -120,7 +138,6 @@ def main():
             detector = apriltag.Detector()
             result = detector.detect(img)
             corners = result[0].corners
-            print(result)
 
             # Initialize the observer such that d_hat = 0 at t = 0
             if i == 0:
@@ -147,8 +164,8 @@ def main():
 
             coord_in_world = coord_in_cam @ H.T
 
-            colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-            p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
             # Compute image jaccobian due to camera speed
             J_image_cam = np.zeros((2*corners.shape[0], 6), dtype=np.float32)
@@ -197,6 +214,14 @@ def main():
             # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
             vel = LA.pinv(J_camera) @ np.concatenate((v_in_world, omega_in_world))
+            # vel = np.zeros_like(vel)
+
+            # Map obstacle edge to image
+            two_ends_in_world = np.array([obstacle_config["lineFromXYZ"] + [1], obstacle_config["lineToXYZ"] + [1]], dtype = np.float32)
+            two_ends_in_cam = two_ends_in_world @ LA.inv(H).T 
+            two_ends_in_image = two_ends_in_cam[:,0:3] @ intrinsic_matrix.T
+            two_ends_in_image = two_ends_in_image/two_ends_in_image[:,-1][:,np.newaxis]
+            two_ends_pixel_coord = two_ends_in_image[:,0:2]
 
             if test_settings["save_rgb"] == "true":
                 rgb_opengl = info["rgb"]
@@ -211,6 +236,23 @@ def main():
                 for ii in range(len(corners)):
                     x, y = corners[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                x1, y1 = two_ends_pixel_coord[0,:]
+                x2, y2 = two_ends_pixel_coord[1,:]
+
+                y_left = int((y1-y2)/(x1-x2)*(0-x1) + y1)
+                y_right = int((y1-y2)/(x1-x2)*(camera_config["width"]-1-x1) + y1)
+                x_top = int((x1-x2)/(y1-y2)*(0-y1) + x1)
+                x_bottom = int((x1-x2)/(y1-y2)*(camera_config["height"]-1-y1) + x1)
+
+                potential_ends = np.array([[0, y_left],[camera_config["width"]-1, y_right],[x_top, 0],[x_bottom, camera_config["height"]-1]], dtype=np.int_)
+                if_in = np.zeros(4, dtype=bool)
+                for ii in range(len(potential_ends)):
+                    x, y = potential_ends[ii,:]
+                    if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
+                if np.sum(if_in) >= 2:
+                    final_ends = potential_ends[if_in]
+                    cv2.line(img, final_ends[0,:], final_ends[1,:], color=(0, 255, 0), thickness=1) 
+
                 cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
 
             # Step the simulation

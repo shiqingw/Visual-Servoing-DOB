@@ -54,11 +54,12 @@ class FR3CameraSim(Env):
 
         # Load AprilTag board
         self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
-        self.obstacle_ID = p.loadURDF("apriltag_id1.urdf", useFixedBase=True)
-        april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
-        p.resetBasePositionAndOrientation(
-            self.obstacle_ID, [0.4, -0.2, 0.1], april_tag_quat
-        )
+        self.obstacle_ID = p.loadURDF("box.urdf", useFixedBase=True)
+        # self.obstacle_ID = p.loadURDF("apriltag_id1.urdf", useFixedBase=True)
+        # april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
+        # p.resetBasePositionAndOrientation(
+        #     self.obstacle_ID, [0.4, 0.2, 0.1], april_tag_quat
+        # )
 
         # Build pin_robot
         self.robot = RobotWrapper.BuildFromURDF(robot_URDF, package_directory)
@@ -168,21 +169,6 @@ class FR3CameraSim(Env):
                 p.STATE_LOGGING_VIDEO_MP4, self.record_path
             )
        
-        R_camera = info["R_CAMERA"]
-        q = Rotation.from_matrix(R_camera).as_quat()
-        view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
-        
-        img = p.getCameraImage(
-            self.width,
-            self.height,
-            viewMatrix=view_matrix,
-            projectionMatrix=self.projection_matrix
-        )
-
-        info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
-        info["depth"] = np.reshape(img[3], (self.height, self.width))
-        # info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
-
         return info
 
     def get_info(self, q, dq):
@@ -362,7 +348,9 @@ class FR3CameraSim(Env):
                 self.width,
                 self.height,
                 viewMatrix=view_matrix,
-                projectionMatrix=self.projection_matrix
+                projectionMatrix=self.projection_matrix,
+                flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+                renderer=p.ER_BULLET_HARDWARE_OPENGL
             )
 
             info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
@@ -379,12 +367,14 @@ class FR3CameraSim(Env):
         R_camera = info["R_CAMERA"]
         q = Rotation.from_matrix(R_camera).as_quat()
         view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
-        
+
         img = p.getCameraImage(
             self.width,
             self.height,
             viewMatrix=view_matrix,
-            projectionMatrix=self.projection_matrix
+            projectionMatrix=self.projection_matrix,
+            flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+            renderer=p.ER_BULLET_HARDWARE_OPENGL
         )
 
         info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
