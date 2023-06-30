@@ -1,33 +1,47 @@
 {
     "image_save_format": "png",
-    "save_rgb": "false",
-    "save_depth": "false",
-    "save_detection": "true",
-    "enable_gui_camera_data": 1,
-    "horizon": 2000,
+    "save_rgb": 0,
+    "save_depth": 0,
+    "save_detection": 0,
+    "enable_gui_camera_data": 0,
+    "horizon": 200000,
     "step_every": 8,
+    "target_joint_angles": [
+        0.0,
+        -0.785398163,
+        0.0,
+        -2.35619449,
+        0.0,
+        2,
+        0.785398163397,
+        0.001,
+        0.001
+    ],
 
     "camera_config":{
-        "width": 400,
-        "height": 400,
+        "width": 1280,
+        "height": 720,
         "near": 0.02,
-        "far": 1.0,
+        "far": 2.0,
         "fov": 60,
-        "intrinsic_matrix": [[300,0,200],[0,300,200],[0,0,1]]
+        "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
     },
 
     "apriltag_config":{
-        "apriltag_radius": 0.1,
-        "initial_position": [0.4, 0.0, 0.005],
-        "center_position": [0.5, 0.0, 0.005],
+        "apriltag_radius": 0.15,
+        "initial_position": [0.6, 0.0, 0.005],
+        "center_position": [0.75, 0.0, 0.005],
         "augular_velocity": 1,
         "offset_angle": 3.14
     },
 
     "controller_config":{
         "mean_gain": [1.0,1.0],
-        "variance_gain": [1.0,1.0],
-        "variance_target": [2000, 2000]
+        "variance_gain": [0.0,0.0],
+        "variance_target": [2500, 2500],
+        "manipulability_gain": 1000,
+        "horizontal_gain": 1.0,
+        "vertical_gain": 0.0
     },
 
     "observer_config":{
@@ -36,11 +50,17 @@
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.6, -1.0, 0.3],
-        "lineToXYZ" : [0.6, 1.0, 0.3],
+        "lineFromXYZ": [0.7, -1.0, 0.3],
+        "lineToXYZ" : [0.7, 1.0, 0.3],
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
         "obstacle_alpha": 0.5
+    },
+
+    "CBF_config":{
+        "active": 1,
+        "barrier_alpha": 1.0,
+        "compensation": 10.0
     }
 }

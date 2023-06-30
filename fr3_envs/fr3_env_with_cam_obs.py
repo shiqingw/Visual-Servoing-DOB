@@ -4,6 +4,7 @@ import pkgutil
 egl = pkgutil.get_loader('eglRenderer')
 
 import numpy as np
+import numpy.linalg as LA
 import pinocchio as pin
 import pybullet as p
 import pybullet_data
@@ -67,12 +68,12 @@ class FR3CameraSim(Env):
         # Get active joint ids
         self.active_joint_ids = [0, 1, 2, 3, 4, 5, 6, 10, 11]
 
-        # Disable the velocity control on the joints as we use torque control.
+        # Enable the velocity control on the joints 
         p.setJointMotorControlArray(
             self.robotID,
             self.active_joint_ids,
             p.VELOCITY_CONTROL,
-            forces=500*np.ones(9),
+            forces=1000*np.ones(9),
         )
 
         # Get number of joints
@@ -138,10 +139,7 @@ class FR3CameraSim(Env):
         cameraDistance=1.4,
         cameraYaw=66.4,
         cameraPitch=-16.2,
-        lookat=[0.0, 0.0, 0.0]
-    ):
-        super().reset(seed=seed)
-
+        lookat=[0.0, 0.0, 0.0],
         target_joint_angles = [
             0.0,
             -0.785398163,
@@ -153,6 +151,8 @@ class FR3CameraSim(Env):
             0.001,
             0.001,
         ]
+    ):
+        super().reset(seed=seed)
 
         self.q_nominal = np.array(target_joint_angles)
 
@@ -227,8 +227,8 @@ class FR3CameraSim(Env):
             self.CAMERA_FRAME_ID, self.jacobian_frame
         )
 
-        # Get pseudo-inverse of frame Jacobian
-        pinv_jac = np.linalg.pinv(jacobian)
+        # # Get pseudo-inverse of frame Jacobian
+        # pinv_jac = np.linalg.pinv(jacobian)
 
         dJ = pin.getFrameJacobianTimeVariation(
             self.robot.model, self.robot.data, self.EE_FRAME_ID, self.jacobian_frame
@@ -278,7 +278,7 @@ class FR3CameraSim(Env):
             "M(q)^{-1}": Minv,
             "nle": nle,
             "G": self.robot.gravity(q),
-            "pJ_EE": pinv_jac,
+            # "pJ_EE": pinv_jac,
             "R_LINK3": copy.deepcopy(R_link3),
             "P_LINK3": copy.deepcopy(p_link3),
             "q_LINK3": copy.deepcopy(q_LINK3),
@@ -313,8 +313,23 @@ class FR3CameraSim(Env):
             "R_CAMERA": copy.deepcopy(R_camera),
             "P_CAMERA": copy.deepcopy(p_camera),
             "q_CAMERA": copy.deepcopy(q_CAMERA),
-            "J_CAMERA": jacobian_camera,
+            "J_CAMERA": copy.deepcopy(jacobian_camera),
         }
+
+        # Calculate manipulability
+        w = np.sqrt(LA.det(jacobian_camera @ jacobian_camera.T))
+        dwdq = np.zeros(len(q), dtype = np.float32)
+        delta = 0.0001
+        for i in range(len(q)):
+            delta_q = np.zeros_like(q)
+            delta_q[i] = delta
+            self.robot.computeJointJacobians(q+delta_q)
+            jacobian_camera = self.robot.getFrameJacobian(
+                                self.CAMERA_FRAME_ID, self.jacobian_frame)
+            w_new = np.sqrt(LA.det(jacobian_camera @ jacobian_camera.T))
+            dwdq[i] = (w_new-w)/delta
+            
+        info["GRAD_MANIPULABILITY"] = dwdq
 
         return info
 
