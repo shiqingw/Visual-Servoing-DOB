@@ -15,6 +15,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 from scipy.optimize import Bounds, LinearConstraint, minimize, BFGS, SR1
+import cvxpy as cp
+from cvxpylayers.torch import CvxpyLayer
+import torch
 
 import sys
 from pathlib import Path
@@ -66,7 +69,7 @@ def main():
 
     args = parser.parse_args()
     exp_num = args.exp_num
-    results_dir = "{}/results_cbf/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
+    results_dir = "{}/results_diff_opt/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
     test_settings_path = "{}/test_settings/test_settings_{:03d}.json".format(str(Path(__file__).parent), exp_num)
     
     if not os.path.exists(results_dir):
@@ -83,6 +86,7 @@ def main():
     controller_config = test_settings["controller_config"]
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
+    optimization_config = test_settings["optimization_config"]
     joint_limits_config = test_settings["joint_limits_config"]
     joint_lb = np.array(joint_limits_config["lb"], dtype=np.float32)
     joint_ub = np.array(joint_limits_config["ub"], dtype=np.float32)
@@ -122,10 +126,39 @@ def main():
                        lineColorRGB = obstacle_config["lineColorRGB"],
                        lineWidth = obstacle_config["lineWidth"],
                        lifeTime = obstacle_config["lifeTime"])
+    obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
+                                         np.array(obstacle_config["lineToXYZ"]),
+                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+    obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
     p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
+
+    # Differential optimization layer
+    nv = 2
+    nc_target = optimization_config["n_cons_target"]
+    nc_obstacle = optimization_config["n_cons_obstacle"]
+    kappa = optimization_config["exp_coef"]
+
+    _p = cp.Variable(nv)
+    _alpha = cp.Variable(1)
+
+    _A_target = cp.Parameter((nc_target, nv))
+    _b_target = cp.Parameter(nc_target)
+    _A_obstacle = cp.Parameter((nc_obstacle, nv))
+    _b_obstacle = cp.Parameter(nc_obstacle)
+
+    obj = cp.Minimize(_alpha)
+    cons = [cp.sum(cp.exp(kappa*(_A_target @ _p - _b_target))) <= nc_target*_alpha, cp.sum(cp.exp(kappa*(_A_obstacle @ _p - _b_obstacle))) <= nc_obstacle*_alpha]
+    # eps = 1
+    # cons = [cp.sum(cp.abs(_A_target @ _p - _b_target) + _A_target @ _p - _b_target) <= eps*_alpha, cp.sum(cp.abs(_A_obstacle @ _p - _b_obstacle) + _A_obstacle @ _p - _b_obstacle) <= eps*_alpha]
+    problem = cp.Problem(obj, cons)
+    assert problem.is_dpp()
+
+    cvxpylayer = CvxpyLayer(problem, parameters=[_A_target, _b_target, _A_obstacle, _b_obstacle], variables=[_alpha, _p], gp=False)
+
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -188,8 +221,13 @@ def main():
 
             coord_in_world = coord_in_cam @ H.T
 
+            # # Draw apritag vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+
+            # Draw obstacle vertices in world
+            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+            # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
             # Compute image jaccobian due to camera speed
             J_image_cam = np.zeros((2*corners.shape[0], 6), dtype=np.float32)
@@ -238,42 +276,52 @@ def main():
             d_hat = observer_gain @ np.reshape(corners, (2*len(corners),)) - epsilon
 
             # Map to the camera speed expressed in the camera frame
-            # null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ xd_yd_orientation
-            # speeds_in_cam_desired = LA.pinv(J_image_cam) @ (xd_yd - d_hat)
-
+            # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
             null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
             speeds_in_cam_desired = LA.pinv(J_image_cam) @ (xd_yd - d_hat)
 
-            # Map obstacle edge to image
-            two_ends_in_world = np.array([obstacle_config["lineFromXYZ"] + [1], obstacle_config["lineToXYZ"] + [1]], dtype = np.float32)
-            two_ends_in_cam = two_ends_in_world @ LA.inv(H).T 
-            two_ends_in_image = two_ends_in_cam[:,0:3] @ intrinsic_matrix.T
-            two_ends_in_image = two_ends_in_image/two_ends_in_image[:,-1][:,np.newaxis]
-            two_ends_pixel_coord = two_ends_in_image[:,0:2]
+            # Map obstacle vertices to image
+            obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
+            obstacle_corner_in_image = obstacle_corner_in_cam[:,0:3] @ intrinsic_matrix.T
+            obstacle_corner_in_image = obstacle_corner_in_image/obstacle_corner_in_image[:,-1][:,np.newaxis]
+            obstacle_corner_in_image = obstacle_corner_in_image[:,0:2]
 
             if CBF_config["active"] == 1:
                 # Construct CBF and its constraint
-                x1, y1 = two_ends_pixel_coord[0,:]
-                x2, y2 = two_ends_pixel_coord[1,:]
-                CBF = lambda x, y : (y2-y1)*(x-x1) - (y-y1)*(x2-x1)
-                grad_CBF = lambda x, y: np.array([y2-y1, -x2+x1, y-y2, -x+x2, -y+y1, x-x1], dtype=np.float32)
-                grad_CBF_disturbance = lambda x, y: np.array([y2-y1, -x2+x1], dtype=np.float32)
-                # CBF_values = (corners - two_ends_pixel_coord[0,:])@np.array([y2-y1, -(x2-x1)])
-                A_CBF = np.zeros((len(corners), 6), dtype=np.float32)
-                lb_CBF = np.zeros(len(corners), dtype=np.float32)
-                ub_CBF = np.array([np.inf]*len(corners))
-                for ii in range(len(corners)):
-                    actuation_matrix = np.zeros((6,6), dtype = np.float32)
-                    actuation_matrix[0:2,:] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
-                    actuation_matrix[2:4,:] = one_point_image_jacobian(two_ends_in_cam[0,0:3], fx, fy)
-                    actuation_matrix[4:6,:] = one_point_image_jacobian(two_ends_in_cam[1,0:3], fx, fy)
-                    A_CBF[ii,:] = grad_CBF(*corners[ii]) @ actuation_matrix
-                    lb_CBF[ii] = -CBF_config["barrier_alpha"]*CBF(*corners[ii]) + CBF_config["compensation"]\
-                        - grad_CBF_disturbance(*corners[ii]) @ d_hat[2*ii:2*ii+2]
+                target_coords = torch.tensor(corners, dtype=torch.float32, requires_grad=True)
+                x_target = target_coords[:,0]
+                y_target = target_coords[:,1]
+                A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
+                b_target_val = -y_target*torch.roll(x_target,-1) + torch.roll(y_target,-1)*x_target
+
+                obstacle_coords = torch.tensor(obstacle_corner_in_image, dtype=torch.float32, requires_grad=True)
+                x_obstacle = obstacle_coords[:,0]
+                y_obstacle = obstacle_coords[:,1]
+                A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
+                b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
+
+                alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val)
+                CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
+                # print(alpha_sol, p_sol)
+                print(CBF)
+                alpha_sol.backward()
+                target_coords_grad = np.array(target_coords.grad)
+                obstacle_coords_grad = np.array(obstacle_coords.grad)
+                grad_CBF = np.hstack((target_coords_grad.reshape(-1), obstacle_coords_grad.reshape(-1)))
+                grad_CBF_disturbance = target_coords_grad.reshape(-1)
+
+                actuation_matrix = np.zeros((len(grad_CBF), 6), dtype=np.float32)
+                actuation_matrix[0:2*len(target_coords_grad)] = J_image_cam
+                for ii in range(len(obstacle_coords_grad)):
+                    actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
                 
+                A_CBF = grad_CBF @ actuation_matrix
+                lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
+                        - grad_CBF_disturbance @ d_hat
+                ub_CBF = np.array([np.inf])
+
                 CBF_constraint = LinearConstraint(A_CBF, lb_CBF, ub_CBF)
 
                 # solve optimization
@@ -323,22 +371,28 @@ def main():
                 for ii in range(len(corners)):
                     x, y = corners[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-                x1, y1 = two_ends_pixel_coord[0,:]
-                x2, y2 = two_ends_pixel_coord[1,:]
+                for ii in range(len(obstacle_corner_in_image)):
+                    x, y = obstacle_corner_in_image[ii,:]
+                    img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
-                y_left = int((y1-y2)/(x1-x2)*(0-x1) + y1)
-                y_right = int((y1-y2)/(x1-x2)*(camera_config["width"]-1-x1) + y1)
-                x_top = int((x1-x2)/(y1-y2)*(0-y1) + x1)
-                x_bottom = int((x1-x2)/(y1-y2)*(camera_config["height"]-1-y1) + x1)
+                A_target_val = A_target_val.detach().numpy()
+                b_target_val = b_target_val.detach().numpy()
+                A_obstacle_val = A_obstacle_val.detach().numpy()
+                b_obstacle_val = b_obstacle_val.detach().numpy()
 
-                potential_ends = np.array([[0, y_left],[camera_config["width"]-1, y_right],[x_top, 0],[x_bottom, camera_config["height"]-1]], dtype=np.int_)
-                if_in = np.zeros(4, dtype=bool)
-                for ii in range(len(potential_ends)):
-                    x, y = potential_ends[ii,:]
-                    if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
-                if np.sum(if_in) >= 2:
-                    final_ends = potential_ends[if_in]
-                    cv2.line(img, final_ends[0,:], final_ends[1,:], color=(0, 255, 0), thickness=1) 
+
+                # for ii in range(camera_config["width"]):
+                #     for jj in range(camera_config["height"]):
+                #         pp = np.array([ii,jj])
+                #         if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
+                #             x, y = pp
+                #             img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                #         if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
+                #             x, y = pp
+                #             img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+
+                x, y = p_sol.detach().numpy()
+                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
                 cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
 

@@ -83,9 +83,6 @@ def main():
     controller_config = test_settings["controller_config"]
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
-    joint_limits_config = test_settings["joint_limits_config"]
-    joint_lb = np.array(joint_limits_config["lb"], dtype=np.float32)
-    joint_ub = np.array(joint_limits_config["ub"], dtype=np.float32)
     enable_gui_camera_data = test_settings["enable_gui_camera_data"]
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
 
@@ -109,11 +106,11 @@ def main():
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
     mean_errs = np.zeros((num_data,2), dtype = np.float32)
+    variance_errs = np.zeros((num_data,2), dtype = np.float32)
     orientation_errs = np.zeros((num_data,2), dtype = np.float32)
     observer_errs = np.zeros(num_data, dtype = np.float32)
     manipulability = np.zeros(num_data, dtype = np.float32)
-    vels = np.zeros((num_data,9), dtype = np.float32)
-    joint_values = np.zeros((num_data,9), dtype = np.float32)
+
 
     # Obstacle line
     obstacle_config = test_settings["obstacle_config"]
@@ -125,7 +122,7 @@ def main():
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
     p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
-    p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
+    p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 1., 1., obstacle_config["obstacle_alpha"]])
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -156,12 +153,9 @@ def main():
                 if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
             if np.sum(if_in) != len(corners):
                 break
-            
-            # Use cv2 window to display image
-            if enable_gui_camera_data == 0:
-                cv2.namedWindow("RGB")
-                BGR = cv2.cvtColor(rgb_opengl, cv2.COLOR_RGB2BGR)
-                cv2.imshow("RGB", BGR)
+
+            cv2.namedWindow("Input")
+            cv2.imshow("Input", img)
 
             # Initialize the observer such that d_hat = 0 at t = 0
             if i == 0:
@@ -238,10 +232,6 @@ def main():
             d_hat = observer_gain @ np.reshape(corners, (2*len(corners),)) - epsilon
 
             # Map to the camera speed expressed in the camera frame
-            # null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ xd_yd_orientation
-            # speeds_in_cam_desired = LA.pinv(J_image_cam) @ (xd_yd - d_hat)
-
             null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
@@ -297,17 +287,12 @@ def main():
             v_in_world = R_cam_to_world @ v_in_cam
             S_in_world = R_cam_to_world @ skew(omega_in_cam) @ R_cam_to_world.T
             omega_in_world = skew_to_vector(S_in_world)
-
-            # Secondary objective: encourage the joints to stay in the middle of joint limits
-            W = np.diag(-1.0/(joint_ub-joint_lb)**2) /len(joint_lb)
-            q = info["q"]
-            grad_joint = controller_config["joint_limit_gain"]* W @ (q - (joint_ub+joint_lb)/2)
             
             # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
             pinv_J_camera = LA.pinv(J_camera)
             vel = pinv_J_camera @ np.concatenate((v_in_world, omega_in_world)) \
-                + (np.eye(9) - pinv_J_camera @ J_camera) @ grad_joint
+                + (np.eye(9) - pinv_J_camera @ J_camera) @ info["GRAD_MANIPULABILITY"] * controller_config["manipulability_gain"]
             vel[-2:] = 0
 
             if test_settings["save_rgb"] == 1:
@@ -347,11 +332,10 @@ def main():
 
             # Records
             mean_errs[i//step_every,:] = error_mean
+            variance_errs[i//step_every,:] = error_variance
             orientation_errs[i//step_every,:] = error_orientation
             observer_errs[i//step_every] = LA.norm(d_hat - d_true)
             manipulability[i//step_every] = np.sqrt(LA.det(J_camera @ J_camera.T))
-            vels[i//step_every] = vel
-            joint_values[i//step_every] = q
 
             # Step the observer
             epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
@@ -378,6 +362,14 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, variance_errs[:,0], label="x")
+    plt.plot(times, variance_errs[:,1], label="y")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'plot_variance_errs.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
     plt.plot(times, orientation_errs[:,0], label="x")
     plt.plot(times, orientation_errs[:,1], label="y")
     plt.legend()
@@ -399,29 +391,11 @@ def main():
     plt.savefig(os.path.join(results_dir, 'plot_manipulability.png'))
     plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, vels)
-    plt.legend()
-    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'plot_joint_vel.png'))
-    plt.close(fig)
-
-    for i in range(joint_values.shape[1]):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-        plt.plot(times, joint_values[:,i], label="{}".format(i))
-        plt.legend()
-        plt.axhline(y = joint_ub[i], color = 'black', linestyle = 'dotted')
-        plt.axhline(y = joint_lb[i], color = 'black', linestyle = 'dotted')
-        plt.savefig(os.path.join(results_dir, 'plot_joint_value_{}.png'.format(i)))
-        plt.close(fig)
-
     summary = {'times': times,
                 'mean_errs': mean_errs,
-                'orientation_errs': orientation_errs,
+                'variance_errs': variance_errs,
                 'observer_errs': observer_errs,
-                'manipulability': manipulability,
-                'joint_vels': vels,
-                'joint_values': joint_values}
+                'manipulability': manipulability}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))
 

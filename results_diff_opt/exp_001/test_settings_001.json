@@ -57,14 +57,14 @@
     "optimization_config":{
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
-        "exp_coef": 3
+        "exp_coef": 1e-4
     },
 
 
     "CBF_config":{
         "active": 1,
-        "barrier_alpha": 1.0,
+        "barrier_alpha": 1,
         "scaling_lb": 1.03,
-        "compensation": 0.0
+        "compensation": 0.1
     }
 }
