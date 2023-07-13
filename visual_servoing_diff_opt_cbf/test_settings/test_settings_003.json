@@ -14,18 +14,19 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "box.urdf",
+        "obs_urdf": "sphere.urdf",
         "cameraDistance": 1.4,
         "cameraYaw": 66.4,
         "cameraPitch":-16.2,
-        "lookat":[0.0, 0.0, 0.0]
+        "lookat":[0.8, 0.0, 0.25],
+        "robot_base_p_offset": [0,0,0.2]
     },
 
     "camera_config":{
         "width": 1280,
         "height": 720,
-        "near": 0.02,
-        "far": 2.0,
+        "near": 0.15,
+        "far": 3.0,
         "fov": 60,
         "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
     },
@@ -39,17 +40,14 @@
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.8, -0.5, 0.25],
-        "lineToXYZ" : [0.8, 0.5, 0.25],
-        "lineColorRGB" : [0.0, 0.0, 1.0],
-        "lineWidth" : 10,
-        "lifeTime" : 0,
-        "obstacle_alpha": 1.0
+        "center_position": [0.8, 0.3, 0.25],
+        "radius" : 0.1,
+        "obstacle_alpha": 0.4
     },
 
     "controller_config":{
         "mean_gain": [1.0,1.0],
-        "variance_gain": [0.4,0.4],
+        "variance_gain": [0.0,0.0],
         "variance_target": [2500, 2500],
         "horizontal_gain": 1.0,
         "vertical_gain": 0.0,

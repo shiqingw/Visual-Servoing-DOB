@@ -81,6 +81,7 @@ def main():
     with open(test_settings_path, "r", encoding="utf8") as f:
         test_settings = json.load(f)
 
+    simulator_config = test_settings["simulator_config"]
     camera_config = test_settings["camera_config"]
     apriltag_config = test_settings["apriltag_config"]
     controller_config = test_settings["controller_config"]
@@ -90,12 +91,22 @@ def main():
     joint_limits_config = test_settings["joint_limits_config"]
     joint_lb = np.array(joint_limits_config["lb"], dtype=np.float32)
     joint_ub = np.array(joint_limits_config["ub"], dtype=np.float32)
-    enable_gui_camera_data = test_settings["enable_gui_camera_data"]
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
 
     # Create and reset simulation
-    env = FR3CameraSim(camera_config, enable_gui_camera_data, render_mode="human")
-    info = env.reset(target_joint_angles = test_settings["target_joint_angles"])
+    enable_gui_camera_data = simulator_config["enable_gui_camera_data"]
+    obs_urdf = simulator_config["obs_urdf"]
+    cameraDistance = simulator_config["cameraDistance"]
+    cameraYaw = simulator_config["cameraYaw"]
+    cameraPitch = simulator_config["cameraPitch"]
+    lookat = simulator_config["lookat"]
+
+    env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human")
+    info = env.reset(cameraDistance = cameraDistance,
+                     cameraYaw = cameraYaw,
+                     cameraPitch = cameraPitch,
+                     lookat = lookat,
+                     target_joint_angles = test_settings["initial_joint_angles"])
 
     # Reset apriltag position
     april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
@@ -302,11 +313,14 @@ def main():
                 A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
                 b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
 
+                # time1 = time.time()
                 alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val)
                 CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
                 # print(alpha_sol, p_sol)
                 print(CBF)
                 alpha_sol.backward()
+                # time2 = time.time()
+
                 target_coords_grad = np.array(target_coords.grad)
                 obstacle_coords_grad = np.array(obstacle_coords.grad)
                 grad_CBF = np.hstack((target_coords_grad.reshape(-1), obstacle_coords_grad.reshape(-1)))
@@ -332,8 +346,10 @@ def main():
                     return 2*(u-speeds_in_cam_desired)
                 
                 u0 = speeds_in_cam_desired
+                # time3 = time.time()
                 res = minimize(obj, u0, method='trust-constr', jac=obj_der, hess=BFGS(),
                             constraints = [CBF_constraint], options={'verbose': 0})
+                # time4 = time.time()
                 speeds_in_cam = np.array(res.x, dtype=np.float32)
             else: 
                 speeds_in_cam = speeds_in_cam_desired
@@ -346,16 +362,11 @@ def main():
             S_in_world = R_cam_to_world @ skew(omega_in_cam) @ R_cam_to_world.T
             omega_in_world = skew_to_vector(S_in_world)
 
-            # Secondary objective: encourage the joints to stay in the middle of joint limits
-            W = np.diag(-1.0/(joint_ub-joint_lb)**2) /len(joint_lb)
-            q = info["q"]
-            grad_joint = controller_config["joint_limit_gain"]* W @ (q - (joint_ub+joint_lb)/2)
-            
             # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
             pinv_J_camera = LA.pinv(J_camera)
             vel = pinv_J_camera @ np.concatenate((v_in_world, omega_in_world)) \
-                + (np.eye(9) - pinv_J_camera @ J_camera) @ grad_joint
+                + (np.eye(9) - pinv_J_camera @ J_camera) @ info["GRAD_MANIPULABILITY"] * controller_config["manipulability_gain"]
             vel[-2:] = 0
 
             if test_settings["save_rgb"] == 1:
@@ -397,6 +408,8 @@ def main():
                 cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
 
             # Step the simulation
+            
+            # print(time2-time1, time4-time3)
             info = env.step(vel, return_image=False)
 
             # Records
@@ -405,7 +418,7 @@ def main():
             observer_errs[i//step_every] = LA.norm(d_hat - d_true)
             manipulability[i//step_every] = np.sqrt(LA.det(J_camera @ J_camera.T))
             vels[i//step_every] = vel
-            joint_values[i//step_every] = q
+            joint_values[i//step_every] = info["q"]
 
             # Step the observer
             epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
@@ -419,7 +432,6 @@ def main():
         if i % 500 == 0:
             print("Iter {:.2e}".format(i))
         
-
     env.close()
     
     print("==> Drawing plots ...")

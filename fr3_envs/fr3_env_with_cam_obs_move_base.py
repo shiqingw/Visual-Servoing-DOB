@@ -1,7 +1,5 @@
 import copy
 from typing import Optional
-import pkgutil
-egl = pkgutil.get_loader('eglRenderer')
 
 import numpy as np
 import numpy.linalg as LA
@@ -25,7 +23,7 @@ class FR3CameraSim(Env):
         "render_modes": ["human", "rgb_array"],
     }
 
-    def __init__(self, camera_config, enable_gui_camera_data, obs_urdf="box.urdf", render_mode: Optional[str] = None, record_path=None):
+    def __init__(self, camera_config, enable_gui_camera_data, base_translation=[0,0,0], base_orientation_euler=[0,0,0], obs_urdf="box.urdf", render_mode: Optional[str] = None, record_path=None):
         if render_mode == "human":
             self.client = p.connect(p.GUI)
             # Improves rendering performance on M1 Macs
@@ -52,15 +50,15 @@ class FR3CameraSim(Env):
         urdf_search_path = package_directory + "/robots"
         p.setAdditionalSearchPath(urdf_search_path)
         self.robotID = p.loadURDF("{}.urdf".format(model_name), useFixedBase=True)
+        base_quat = p.getQuaternionFromEuler(base_orientation_euler)
+        self.base_R_offset = Rotation.from_quat(base_quat).as_matrix()
+        self.base_p_offset = (np.array(base_translation, dtype=np.float32)+ np.array([0,0,0.05])).reshape(-1,1)
+        p.resetBasePositionAndOrientation(self.robotID, self.base_p_offset, base_quat)
 
-        # Load AprilTag board
+        # Load AprilTag, obstacle, and the base under the robot
         self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
         self.obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
-        # self.obstacle_ID = p.loadURDF("apriltag_id1.urdf", useFixedBase=True)
-        # april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
-        # p.resetBasePositionAndOrientation(
-        #     self.obstacle_ID, [0.4, 0.2, 0.1], april_tag_quat
-        # )
+        self.box_base = p.loadURDF("box_base.urdf", useFixedBase=True)
 
         # Build pin_robot
         self.robot = RobotWrapper.BuildFromURDF(robot_URDF, package_directory)
@@ -101,9 +99,7 @@ class FR3CameraSim(Env):
         far = camera_config["far"]
         camera_intrinsic_matrix = np.array(camera_config["intrinsic_matrix"],dtype=np.float32)
         self.projection_matrix =  cvK2BulletP(camera_intrinsic_matrix, self.width, self.height, near, far)
-
         # self.projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
-
 
         # Set observation and action space
         obs_low_q = []
@@ -238,35 +234,35 @@ class FR3CameraSim(Env):
 
         # compute the position and rotation of the crude models
         p_link3, R_link3, q_LINK3 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [-0.145])), self.FR3_LINK3_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [-0.145])), self.FR3_LINK3_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_link4, R_link4, q_LINK4 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [0.0])), self.FR3_LINK4_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [0.0])), self.FR3_LINK4_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_link5_1, R_link5_1, q_LINK5_1 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [-0.26])), self.FR3_LINK5_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [-0.26])), self.FR3_LINK5_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_link5_2, R_link5_2, q_LINK5_2 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.08], [-0.13])), self.FR3_LINK5_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.08], [-0.13])), self.FR3_LINK5_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_link6, R_link6, q_LINK6 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [-0.03])), self.FR3_LINK6_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [-0.03])), self.FR3_LINK6_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_link7, R_link7, q_LINK7 = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [0.01])), self.FR3_LINK7_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [0.01])), self.FR3_LINK7_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_hand, R_hand, q_HAND = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [0.06])), self.FR3_HAND_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [0.06])), self.FR3_HAND_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         p_camera, R_camera, q_CAMERA = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [0.00])), self.CAMERA_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [0.00])), self.CAMERA_FRAME_ID, self.base_R_offset, self. base_p_offset
         )
 
         info = {
@@ -437,7 +433,7 @@ class FR3CameraSim(Env):
             velocityGains=oneGains,
         )
 
-    def compute_crude_location(self, R_offset, p_offset, frame_id):
+    def compute_crude_location(self, R_offset, p_offset, frame_id, base_R_offset, base_p_offset):
         # get link orientation and position
         _p = self.robot.data.oMf[frame_id].translation
         _Rot = self.robot.data.oMf[frame_id].rotation
@@ -450,8 +446,13 @@ class FR3CameraSim(Env):
         _TB = np.hstack((R_offset, p_offset))
         TB = np.vstack((_TB, np.array([[0.0, 0.0, 0.0, 1.0]])))
 
+        # compute base offset transformation matrix
+        _TW = np.hstack((base_R_offset, base_p_offset))
+        TW = np.vstack((_TW, np.array([[0.0, 0.0, 0.0, 1.0]])))
+
+
         # get transformation matrix
-        T_mat = T @ TB
+        T_mat = TW @ T @ TB
 
         # compute crude model location
         p = (T_mat @ np.array([[0.0], [0.0], [0.0], [1.0]]))[:3, 0]
