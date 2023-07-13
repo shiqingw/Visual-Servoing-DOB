@@ -3,7 +3,7 @@
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
-    "horizon": 4000,
+    "horizon": 2200,
     "step_every": 8,
     "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
 
@@ -25,23 +25,20 @@
     "camera_config":{
         "width": 1280,
         "height": 720,
-        "near": 0.15,
+        "near": 0.12,
         "far": 3.0,
         "fov": 60,
         "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
     },
 
     "apriltag_config":{
-        "apriltag_radius": 0.11,
-        "initial_position": [0.37, 0.0, 0.005],
-        "center_position": [0.48, 0.0, 0.005],
-        "augular_velocity": 1.0,
-        "offset_angle": 3.14
+        "initial_position": [0.46, -0.5, 0.005],
+        "linear_velocity": [0.0, 0.1, 0.0]
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.46, -0.05, 0.30],
-        "lineToXYZ" : [0.46, 0.05, 0.30],
+        "lineFromXYZ": [0.4, -0.05, 0.30],
+        "lineToXYZ" : [0.4, 0.05, 0.30],
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
@@ -51,9 +48,9 @@
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [1.0,1.0],
-        "variance_target": [4500, 4500],
+        "variance_target": [3000, 3000],
         "horizontal_gain": 1.0,
-        "vertical_gain": 0.0,
+        "vertical_gain": 0.5,
         "manipulability_gain": 10,
         "joint_limit_gain": 10
     },
@@ -66,7 +63,7 @@
     "optimization_config":{
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
-        "exp_coef": 1e-3
+        "exp_coef": 1e-4
     },
 
 
@@ -74,6 +71,6 @@
         "active": 1,
         "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
-        "compensation": 3.0
+        "compensation": 1.0
     }
 }
