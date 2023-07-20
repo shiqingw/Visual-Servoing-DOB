@@ -1,0 +1,80 @@
+{
+    "image_save_format": "png",
+    "save_rgb": 0,
+    "save_depth": 0,
+    "save_detection": 0,
+    "save_scaling_function": 0,
+    "horizon": 4000,
+    "step_every": 8,
+    "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
+
+    "joint_limits_config":{
+        "lb":[-2.3093, -1.5133, -2.4937, -2.7478, -2.48, 0.8521, -2.6895, 0, 0],
+        "ub":[2.3093, 1.5133, 2.4937, -0.4461, 2.48, 4.2094, 2.6895, 0.04, 0.04]
+    },
+
+    "simulator_config":{
+        "enable_gui_camera_data": 0,
+        "obs_urdf": "square1.urdf",
+        "cameraDistance": 1.4,
+        "cameraYaw": 66.4,
+        "cameraPitch":-16.2,
+        "lookat":[0.8, 0.0, 0.25],
+        "robot_base_p_offset": [0,0,0.2]
+    },
+
+    "camera_config":{
+        "width": 1280,
+        "height": 720,
+        "near": 0.15,
+        "far": 3.0,
+        "fov": 60,
+        "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
+    },
+
+    "apriltag_config":{
+        "apriltag_radius": 0.11,
+        "initial_position": [0.37, 0.0, 0.005],
+        "center_position": [0.48, 0.0, 0.005],
+        "augular_velocity": 1.0,
+        "offset_angle": 3.14
+    },
+
+    "obstacle_config":{
+        "lineFromXYZ": [0.46, -0.05, 0.30],
+        "lineToXYZ" : [0.46, 0.05, 0.30],
+        "lineColorRGB" : [0.0, 0.0, 1.0],
+        "lineWidth" : 10,
+        "lifeTime" : 0,
+        "obstacle_alpha": 1
+    },
+
+    "controller_config":{
+        "mean_gain": [1.0,1.0],
+        "variance_gain": [1.0,1.0],
+        "variance_target": [4500, 4500],
+        "horizontal_gain": 1.0,
+        "vertical_gain": 0.0,
+        "manipulability_gain": 10,
+        "joint_limit_gain": 10
+    },
+
+    "observer_config":{
+        "gain": [2,2],
+        "num_points": 4
+    },
+
+    "optimization_config":{
+        "n_cons_obstacle": 4,
+        "n_cons_target": 4,
+        "exp_coef": 1e-3
+    },
+
+
+    "CBF_config":{
+        "active": 1,
+        "barrier_alpha": 1.0,
+        "scaling_lb": 1.03,
+        "compensation": 3.0
+    }
+}

@@ -50,7 +50,7 @@
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [0.4,0.4],
-        "variance_target": [2500, 2500],
+        "variance_target": [2000, 2000],
         "horizontal_gain": 1.0,
         "vertical_gain": 0.0,
         "manipulability_gain": 10,

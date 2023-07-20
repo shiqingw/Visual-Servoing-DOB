@@ -3,8 +3,9 @@
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
-    "horizon": 4000,
-    "step_every": 8,
+    "save_scaling_function": 0,
+    "horizon": 40000,
+    "step_every": 100,
     "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{
@@ -18,7 +19,7 @@
         "cameraDistance": 1.4,
         "cameraYaw": 66.4,
         "cameraPitch":-16.2,
-        "lookat":[0.8, 0.0, 0.25],
+        "lookat":[0.46, 0.0, 0.30],
         "robot_base_p_offset": [0,0,0.2]
     },
 
@@ -45,7 +46,7 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 0.3
+        "obstacle_alpha": 1
     },
 
     "controller_config":{
@@ -71,7 +72,7 @@
 
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
         "compensation": 3.0

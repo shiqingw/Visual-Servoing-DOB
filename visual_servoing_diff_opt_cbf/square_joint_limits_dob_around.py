@@ -186,7 +186,7 @@ def main():
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
+        # p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
  
@@ -421,9 +421,30 @@ def main():
 
                 cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
 
+            if test_settings["save_scaling_function"] == 1:
+                blank_img = np.ones_like(img)*255
+
+                A_target_val = A_target_val.detach().numpy()
+                b_target_val = b_target_val.detach().numpy()
+                A_obstacle_val = A_obstacle_val.detach().numpy()
+                b_obstacle_val = b_obstacle_val.detach().numpy()
+
+                for ii in range(camera_config["width"]):
+                    for jj in range(camera_config["height"]):
+                        pp = np.array([ii,jj])
+                        if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
+                            x, y = pp
+                            img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
+                        if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
+                            x, y = pp
+                            img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
+                cv2.imwrite(results_dir+'/scaling_functions_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
+
+
             # Step the simulation
             
             # print(time2-time1, time4-time3)
+            vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
             # Records
