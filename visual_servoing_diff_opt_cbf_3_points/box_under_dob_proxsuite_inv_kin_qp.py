@@ -174,6 +174,12 @@ def main():
     n_in = 1
     cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
 
+    # Inverse kinematics with joint limits
+    n = 9
+    n_eq = 0
+    n_in = 9
+    inv_kin_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+    
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
@@ -360,17 +366,18 @@ def main():
             v_in_world = R_cam_to_world @ v_in_cam
             S_in_world = R_cam_to_world @ skew(omega_in_cam) @ R_cam_to_world.T
             omega_in_world = skew_to_vector(S_in_world)
+            u_desired = np.hstack((v_in_world, omega_in_world))
 
-            # Secondary objective: encourage the joints to stay in the middle of joint limits
-            W = np.diag(-1.0/(joint_ub-joint_lb)**2) /len(joint_lb)
+            # Inverse kinematic with joint limits
             q = info["q"]
-            grad_joint = controller_config["joint_limit_gain"]* W @ (q - (joint_ub+joint_lb)/2)
-            
-            # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
-            pinv_J_camera = LA.pinv(J_camera)
-            vel = pinv_J_camera @ np.concatenate((v_in_world, omega_in_world)) \
-                + (np.eye(9) - pinv_J_camera @ J_camera) @ grad_joint
+            H = J_camera.T @ J_camera
+            g = - J_camera.T @ u_desired
+            C = np.eye(9)*dt*step_every
+            inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
+            inv_kin_qp.solve()
+
+            vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
             if test_settings["save_rgb"] == 1:
