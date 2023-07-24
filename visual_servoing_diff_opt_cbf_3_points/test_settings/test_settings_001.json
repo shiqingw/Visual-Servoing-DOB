@@ -1,8 +1,8 @@
 {
     "image_save_format": "png",
-    "save_rgb": 1,
+    "save_rgb": 0,
     "save_depth": 0,
-    "save_detection": 1,
+    "save_detection": 0,
     "horizon": 4000,
     "step_every": 8,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
