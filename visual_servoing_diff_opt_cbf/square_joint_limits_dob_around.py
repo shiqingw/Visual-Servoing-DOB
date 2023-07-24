@@ -186,7 +186,7 @@ def main():
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        # p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
+        p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
  
@@ -444,7 +444,7 @@ def main():
             # Step the simulation
             
             # print(time2-time1, time4-time3)
-            vel = np.zeros_like(vel)
+            # vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
             # Records
