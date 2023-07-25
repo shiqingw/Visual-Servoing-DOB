@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
-from scipy.optimize import Bounds, LinearConstraint, minimize, BFGS, SR1
+import proxsuite
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 import torch
@@ -180,6 +180,32 @@ def main():
 
     cvxpylayer = CvxpyLayer(problem, parameters=[_A_target, _b_target, _A_obstacle, _b_obstacle], variables=[_alpha, _p], gp=False)
 
+    # CBF-QP
+    n = 6
+    n_eq = 0
+    n_in = 1
+    cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+
+    # Inverse kinematics with joint limits
+    n = 9
+    n_eq = 0
+    n_in = 9
+    inv_kin_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+
+    # Adjust mean and variance target to 3 points
+    num_points = 3
+    x0 = intrinsic_matrix[0, 2]
+    y0 = intrinsic_matrix[1, 2]
+    old_mean_target = np.array([x0,y0], dtype=np.float32)
+    old_variance_target = np.array(controller_config["variance_target"], dtype=np.float32)
+    desired_coords = np.array([[-1, -1],
+                                [ 1, -1],
+                                [ 1,  1],
+                                [-1,  1]], dtype = np.float32)
+    desired_coords = desired_coords*np.sqrt(old_variance_target) + old_mean_target
+    mean_target = np.mean(desired_coords[0:num_points,:], axis=0)
+    variance_target = np.var(desired_coords[0:num_points,:], axis = 0)
+    print(mean_target, variance_target)
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -259,20 +285,17 @@ def main():
 
             # Compute desired pixel velocity (mean)
             mean_gain = np.diag(controller_config["mean_gain"])
-            x0 = intrinsic_matrix[0, 2]
-            y0 = intrinsic_matrix[1, 2]
-            J_mean = 1/len(corners)*np.tile(np.eye(2), len(corners))
-            error_mean = np.mean(corners, axis=0) - [x0,y0]
+            J_mean = 1/num_points*np.tile(np.eye(2), num_points)
+            error_mean = np.mean(corners[0:num_points,:], axis=0) - mean_target
             xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Compute desired pixel velocity (variance)
             variance_gain = np.diag(controller_config["variance_gain"])
-            variance_target = controller_config["variance_target"]
-            J_variance = np.tile(- np.diag(np.mean(corners, axis=0)), len(corners))
-            J_variance[0,0::2] += corners[:,0]
-            J_variance[1,1::2] += corners[:,1]
-            J_variance = 2/len(corners)*J_variance
-            error_variance = np.var(corners, axis = 0) - variance_target
+            J_variance = np.tile(- np.diag(np.mean(corners[0:num_points,:], axis=0)), num_points)
+            J_variance[0,0::2] += corners[0:num_points,0]
+            J_variance[1,1::2] += corners[0:num_points,1]
+            J_variance = 2/num_points*J_variance
+            error_variance = np.var(corners[0:num_points,:], axis = 0) - variance_target
             xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
 
             # Compute desired pixel velocity (orientation)
@@ -286,6 +309,9 @@ def main():
             J_orientation[0,1::2] += corners[:,1] - corners[tmp,1]
             J_orientation[1,0::2] += corners[:,0] - np.flip(corners[:,0])
             J_orientation = 2*J_orientation
+            J_orientation = J_orientation[:,0:2*num_points]
+            J_orientation[1,0] = 0
+            J_orientation[0,5] = 0
             error_orientation = np.sum(J_orientation**2, axis=1)/8.0
             xd_yd_orientation = - LA.pinv(J_orientation) @ orientation_gain @ error_orientation
 
@@ -298,10 +324,11 @@ def main():
 
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
-            null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            null_variance = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_variance) @ J_variance
+            null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
+            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
-            speeds_in_cam_desired = LA.pinv(J_image_cam) @ (xd_yd - d_hat)
+            J_active = J_image_cam[0:2*num_points]
+            speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 10*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -341,26 +368,28 @@ def main():
                 for ii in range(len(obstacle_coords_grad)):
                     actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
                 
-                A_CBF = grad_CBF @ actuation_matrix
+                A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
                 lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
                         - grad_CBF_disturbance @ d_hat
-                ub_CBF = np.array([np.inf])
+                H = np.eye(6)
+                g = -speeds_in_cam_desired
 
-                CBF_constraint = LinearConstraint(A_CBF, lb_CBF, ub_CBF)
-
-                # solve optimization
-                def obj(u):
-                    return (u-speeds_in_cam_desired).T @ (u-speeds_in_cam_desired)
-                
-                def obj_der(u):
-                    return 2*(u-speeds_in_cam_desired)
-                
-                u0 = speeds_in_cam_desired
                 # time3 = time.time()
-                res = minimize(obj, u0, method='trust-constr', jac=obj_der, hess=BFGS(),
-                            constraints = [CBF_constraint], options={'verbose': 0})
+                if i==0:
+                    cbf_qp.init(H, g, None, None, A_CBF, lb_CBF, None)
+                    cbf_qp.settings.eps_abs = 1.0e-9
+                    cbf_qp.solve()
+                else:
+                    cbf_qp.settings.initial_guess = (
+                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                    )
+                    cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
+                    cbf_qp.settings.eps_abs = 1.0e-9
+                    cbf_qp.solve()
                 # time4 = time.time()
-                speeds_in_cam = np.array(res.x, dtype=np.float32)
+                # print(time4-time3)
+
+                speeds_in_cam = cbf_qp.results.x
             else: 
                 speeds_in_cam = speeds_in_cam_desired
 
@@ -371,17 +400,26 @@ def main():
             v_in_world = R_cam_to_world @ v_in_cam
             S_in_world = R_cam_to_world @ skew(omega_in_cam) @ R_cam_to_world.T
             omega_in_world = skew_to_vector(S_in_world)
+            u_desired = np.hstack((v_in_world, omega_in_world))
 
-            # Secondary objective: encourage the joints to stay in the middle of joint limits
-            W = np.diag(-1.0/(joint_ub-joint_lb)**2) /len(joint_lb)
+            # Inverse kinematic with joint limits
             q = info["q"]
-            grad_joint = controller_config["joint_limit_gain"]* W @ (q - (joint_ub+joint_lb)/2)
-            
-            # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
-            pinv_J_camera = LA.pinv(J_camera)
-            vel = pinv_J_camera @ np.concatenate((v_in_world, omega_in_world)) \
-                + (np.eye(9) - pinv_J_camera @ J_camera) @ grad_joint
+            H = J_camera.T @ J_camera
+            g = - J_camera.T @ u_desired
+            C = np.eye(9)*dt*step_every
+            if i == 0:
+                inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
+                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.solve()
+            else:
+                inv_kin_qp.settings.initial_guess = (
+                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                    )
+                inv_kin_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q)
+                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.solve()
+            vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
             if test_settings["save_rgb"] == 1:

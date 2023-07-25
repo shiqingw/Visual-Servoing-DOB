@@ -179,6 +179,20 @@ def main():
     n_eq = 0
     n_in = 9
     inv_kin_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+
+    # Adjust mean and variance target to 3 points
+    num_points = 3
+    x0 = intrinsic_matrix[0, 2]
+    y0 = intrinsic_matrix[1, 2]
+    old_mean_target = np.array([x0,y0], dtype=np.float32)
+    old_variance_target = np.array(controller_config["variance_target"], dtype=np.float32)
+    desired_coords = np.array([[-1, -1],
+                                [ 1, -1],
+                                [ 1,  1],
+                                [-1,  1]], dtype = np.float32)
+    desired_coords = desired_coords*np.sqrt(old_variance_target) + old_mean_target
+    mean_target = np.mean(desired_coords[0:num_points,:], axis=0)
+    variance_target = np.var(desired_coords[0:num_points,:], axis = 0)
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -257,17 +271,13 @@ def main():
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
 
             # Compute desired pixel velocity (mean)
-            num_points = 3
             mean_gain = np.diag(controller_config["mean_gain"])
-            x0 = intrinsic_matrix[0, 2]
-            y0 = intrinsic_matrix[1, 2]
             J_mean = 1/num_points*np.tile(np.eye(2), num_points)
-            error_mean = np.mean(corners[0:num_points,:], axis=0) - [x0,y0]
+            error_mean = np.mean(corners[0:num_points,:], axis=0) - mean_target
             xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Compute desired pixel velocity (variance)
             variance_gain = np.diag(controller_config["variance_gain"])
-            variance_target = controller_config["variance_target"]
             J_variance = np.tile(- np.diag(np.mean(corners[0:num_points,:], axis=0)), num_points)
             J_variance[0,0::2] += corners[0:num_points,0]
             J_variance[1,1::2] += corners[0:num_points,1]
@@ -304,7 +314,10 @@ def main():
             null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
-            speeds_in_cam_desired = LA.pinv(J_image_cam[0:2*num_points]) @ (xd_yd - d_hat[0:2*num_points])
+            # speeds_in_cam_desired = LA.pinv(J_image_cam[0:2*num_points]) @ (xd_yd - d_hat[0:2*num_points])
+            J_active = J_image_cam[0:2*num_points]
+            speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 

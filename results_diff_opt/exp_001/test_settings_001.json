@@ -34,7 +34,7 @@
         "apriltag_radius": 0.15,
         "initial_position": [0.7, 0.0, 0.005],
         "center_position": [0.85, 0.0, 0.005],
-        "augular_velocity": 1,
+        "augular_velocity": 0,
         "offset_angle": 3.14
     },
 
@@ -50,7 +50,7 @@
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [0.4,0.4],
-        "variance_target": [2000, 2000],
+        "variance_target": [2500, 2500],
         "horizontal_gain": 1.0,
         "vertical_gain": 0.0,
         "manipulability_gain": 10,
@@ -70,7 +70,7 @@
 
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "barrier_alpha": 1,
         "scaling_lb": 1.03,
         "compensation": 0.1

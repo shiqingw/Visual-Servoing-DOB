@@ -18,6 +18,7 @@ def main():
     print(file_directory)
     robot_URDF = file_directory + "/robots/fr3.urdf"
     robotID = p.loadURDF(robot_URDF, useFixedBase=True)
+    p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=32.67, cameraPitch=-31.46, cameraTargetPosition=[0,0,0])
 
     # Get number of joints
     n_j = p.getNumJoints(robotID)

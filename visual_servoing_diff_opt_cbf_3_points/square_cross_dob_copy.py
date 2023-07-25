@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
-import proxsuite
+from scipy.optimize import Bounds, LinearConstraint, minimize, BFGS, SR1
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 import torch
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict
 from configuration import Configuration
 
@@ -61,7 +61,7 @@ def point_in_image(x, y, width, height):
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=5, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -81,6 +81,7 @@ def main():
     with open(test_settings_path, "r", encoding="utf8") as f:
         test_settings = json.load(f)
 
+    # Various configs
     simulator_config = test_settings["simulator_config"]
     camera_config = test_settings["camera_config"]
     apriltag_config = test_settings["apriltag_config"]
@@ -88,10 +89,18 @@ def main():
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
     optimization_config = test_settings["optimization_config"]
+
+    # Joint limits
     joint_limits_config = test_settings["joint_limits_config"]
     joint_lb = np.array(joint_limits_config["lb"], dtype=np.float32)
     joint_ub = np.array(joint_limits_config["ub"], dtype=np.float32)
+
+    # Camera parameters
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    x0 = intrinsic_matrix[0, 2]
+    y0 = intrinsic_matrix[1, 2]
 
     # Create and reset simulation
     enable_gui_camera_data = simulator_config["enable_gui_camera_data"]
@@ -100,8 +109,9 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
+    robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
-    env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human")
+    env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, obs_urdf=obs_urdf, render_mode="human")
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
@@ -139,8 +149,8 @@ def main():
                        lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
@@ -168,17 +178,10 @@ def main():
 
     cvxpylayer = CvxpyLayer(problem, parameters=[_A_target, _b_target, _A_obstacle, _b_obstacle], variables=[_alpha, _p], gp=False)
 
-    # CBF-QP
-    n = 6
-    n_eq = 0
-    n_in = 1
-    cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
-
+    
     for i in range(T):
-        augular_velocity = apriltag_config["augular_velocity"]
-        apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
-        apriltag_radius = apriltag_config["apriltag_radius"]
-        apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
+        linear_velocity = np.array(apriltag_config["linear_velocity"])
+        apriltag_position = np.array(apriltag_config["initial_position"]) + i*dt*linear_velocity
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
@@ -193,7 +196,8 @@ def main():
 
             # Break if no corner detected
             if len(result) == 0:
-                break
+                vel = np.zeros(9, dtype=np.float32)
+                continue
             corners = result[0].corners
 
             # Break if corner out of image
@@ -239,7 +243,7 @@ def main():
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
-            # Draw obstacle vertices in world
+            # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -251,22 +255,21 @@ def main():
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
 
             # Compute desired pixel velocity (mean)
-            num_points = 3
             mean_gain = np.diag(controller_config["mean_gain"])
             x0 = intrinsic_matrix[0, 2]
             y0 = intrinsic_matrix[1, 2]
-            J_mean = 1/num_points*np.tile(np.eye(2), num_points)
-            error_mean = np.mean(corners[0:num_points,:], axis=0) - [x0,y0]
+            J_mean = 1/len(corners)*np.tile(np.eye(2), len(corners))
+            error_mean = np.mean(corners, axis=0) - [x0,y0]
             xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Compute desired pixel velocity (variance)
             variance_gain = np.diag(controller_config["variance_gain"])
             variance_target = controller_config["variance_target"]
-            J_variance = np.tile(- np.diag(np.mean(corners[0:num_points,:], axis=0)), num_points)
-            J_variance[0,0::2] += corners[0:num_points,0]
-            J_variance[1,1::2] += corners[0:num_points,1]
-            J_variance = 2/num_points*J_variance
-            error_variance = np.var(corners[0:num_points,:], axis = 0) - variance_target
+            J_variance = np.tile(- np.diag(np.mean(corners, axis=0)), len(corners))
+            J_variance[0,0::2] += corners[:,0]
+            J_variance[1,1::2] += corners[:,1]
+            J_variance = 2/len(corners)*J_variance
+            error_variance = np.var(corners, axis = 0) - variance_target
             xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
 
             # Compute desired pixel velocity (orientation)
@@ -280,9 +283,6 @@ def main():
             J_orientation[0,1::2] += corners[:,1] - corners[tmp,1]
             J_orientation[1,0::2] += corners[:,0] - np.flip(corners[:,0])
             J_orientation = 2*J_orientation
-            J_orientation = J_orientation[:,0:2*num_points]
-            J_orientation[1,0] = 0
-            J_orientation[0,5] = 0
             error_orientation = np.sum(J_orientation**2, axis=1)/8.0
             xd_yd_orientation = - LA.pinv(J_orientation) @ orientation_gain @ error_orientation
 
@@ -295,10 +295,10 @@ def main():
 
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
-            null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
+            null_mean = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_mean) @ J_mean
+            null_variance = np.eye(2*len(corners), dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
-            speeds_in_cam_desired = LA.pinv(J_image_cam[0:2*num_points]) @ (xd_yd - d_hat[0:2*num_points])
+            speeds_in_cam_desired = LA.pinv(J_image_cam) @ (xd_yd - d_hat)
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -338,18 +338,26 @@ def main():
                 for ii in range(len(obstacle_coords_grad)):
                     actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
                 
-                A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
+                A_CBF = grad_CBF @ actuation_matrix
                 lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
                         - grad_CBF_disturbance @ d_hat
-                H = np.eye(6)
-                g = -speeds_in_cam_desired
+                ub_CBF = np.array([np.inf])
 
+                CBF_constraint = LinearConstraint(A_CBF, lb_CBF, ub_CBF)
+
+                # solve optimization
+                def obj(u):
+                    return (u-speeds_in_cam_desired).T @ (u-speeds_in_cam_desired)
+                
+                def obj_der(u):
+                    return 2*(u-speeds_in_cam_desired)
+                
+                u0 = speeds_in_cam_desired
                 # time3 = time.time()
-                cbf_qp.init(H, g, None, None, A_CBF, lb_CBF, None)
-                cbf_qp.solve()
+                res = minimize(obj, u0, method='trust-constr', jac=obj_der, hess=BFGS(),
+                            constraints = [CBF_constraint], options={'verbose': 0})
                 # time4 = time.time()
-
-                speeds_in_cam = cbf_qp.results.x
+                speeds_in_cam = np.array(res.x, dtype=np.float32)
             else: 
                 speeds_in_cam = speeds_in_cam_desired
 
@@ -390,21 +398,20 @@ def main():
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
-                A_target_val = A_target_val.detach().numpy()
-                b_target_val = b_target_val.detach().numpy()
-                A_obstacle_val = A_obstacle_val.detach().numpy()
-                b_obstacle_val = b_obstacle_val.detach().numpy()
+                # A_target_val = A_target_val.detach().numpy()
+                # b_target_val = b_target_val.detach().numpy()
+                # A_obstacle_val = A_obstacle_val.detach().numpy()
+                # b_obstacle_val = b_obstacle_val.detach().numpy()
 
-
-                for ii in range(camera_config["width"]):
-                    for jj in range(camera_config["height"]):
-                        pp = np.array([ii,jj])
-                        if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
-                            x, y = pp
-                            img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-                        if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
-                            x, y = pp
-                            img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                # for ii in range(camera_config["width"]):
+                #     for jj in range(camera_config["height"]):
+                #         pp = np.array([ii,jj])
+                #         if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
+                #             x, y = pp
+                #             img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                #         if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
+                #             x, y = pp
+                #             img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
                 x, y = p_sol.detach().numpy()
                 img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)

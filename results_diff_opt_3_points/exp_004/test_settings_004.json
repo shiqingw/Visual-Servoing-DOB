@@ -70,7 +70,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
         "compensation": 1.0

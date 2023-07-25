@@ -254,6 +254,7 @@ def main():
             J_mean = 1/len(corners)*np.tile(np.eye(2), len(corners))
             error_mean = np.mean(corners, axis=0) - [x0,y0]
             xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
+            print(np.mean(corners[0:3,:], axis=0))
 
             # Compute desired pixel velocity (variance)
             variance_gain = np.diag(controller_config["variance_gain"])
@@ -264,6 +265,7 @@ def main():
             J_variance = 2/len(corners)*J_variance
             error_variance = np.var(corners, axis = 0) - variance_target
             xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
+            print(np.var(corners[0:3,:], axis = 0))
 
             # Compute desired pixel velocity (orientation)
             orientation_gain = np.diag([controller_config["horizontal_gain"], controller_config["vertical_gain"]])
