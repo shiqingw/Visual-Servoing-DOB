@@ -129,14 +129,16 @@ def main():
     manipulability = np.zeros(num_data, dtype = np.float32)
     vels = np.zeros((num_data,9), dtype = np.float32)
     joint_values = np.zeros((num_data,9), dtype = np.float32)
+    cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
+    cbf_value = np.zeros(num_data, dtype = np.float32)
 
     # Obstacle line
     obstacle_config = test_settings["obstacle_config"]
-    p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
-                       lineToXYZ = obstacle_config["lineToXYZ"],
-                       lineColorRGB = obstacle_config["lineColorRGB"],
-                       lineWidth = obstacle_config["lineWidth"],
-                       lifeTime = obstacle_config["lifeTime"])
+    # p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
+    #                    lineToXYZ = obstacle_config["lineToXYZ"],
+    #                    lineColorRGB = obstacle_config["lineColorRGB"],
+    #                    lineWidth = obstacle_config["lineWidth"],
+    #                    lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
@@ -339,36 +341,58 @@ def main():
                 A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
                 b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
 
-                # time1 = time.time()
-                alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val)
-                CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
-                # print(alpha_sol, p_sol)
-                print(CBF)
-                alpha_sol.backward()
-                # time2 = time.time()
+                # check if the obstacle is far to avoid numerical instability
+                A_obstacle_np = A_obstacle_val.detach().numpy()
+                b_obstacle_np = b_obstacle_val.detach().numpy()
+                tmp = corners @ A_obstacle_np.T - b_obstacle_np
+                tmp = np.sum(np.exp(kappa*tmp), axis=1)
+     
+                if np.min(tmp) <= CBF_config["threshold"] and np.max(tmp) != np.inf:
+                    time1 = time.time()
+                    alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
+                                                  solver_args=optimization_config["solver_args"])
+                    CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
+                    # print(alpha_sol, p_sol)
+                    print(CBF)
+                    alpha_sol.backward()
+                    time2 = time.time()
+                    cvxpylayer_computation_time[i//step_every] = time2-time1
+                    cbf_value[i//step_every] = CBF
 
-                target_coords_grad = np.array(target_coords.grad)
-                obstacle_coords_grad = np.array(obstacle_coords.grad)
-                grad_CBF = np.hstack((target_coords_grad.reshape(-1), obstacle_coords_grad.reshape(-1)))
-                grad_CBF_disturbance = target_coords_grad.reshape(-1)
+                    target_coords_grad = np.array(target_coords.grad)
+                    obstacle_coords_grad = np.array(obstacle_coords.grad)
+                    grad_CBF = np.hstack((target_coords_grad.reshape(-1), obstacle_coords_grad.reshape(-1)))
+                    grad_CBF_disturbance = target_coords_grad.reshape(-1)
 
-                actuation_matrix = np.zeros((len(grad_CBF), 6), dtype=np.float32)
-                actuation_matrix[0:2*len(target_coords_grad)] = J_image_cam
-                for ii in range(len(obstacle_coords_grad)):
-                    actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
-                
-                A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
-                lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
-                        - grad_CBF_disturbance @ d_hat
-                H = np.eye(6)
-                g = -speeds_in_cam_desired
+                    actuation_matrix = np.zeros((len(grad_CBF), 6), dtype=np.float32)
+                    actuation_matrix[0:2*len(target_coords_grad)] = J_image_cam
+                    for ii in range(len(obstacle_coords_grad)):
+                        actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
+                    
+                    A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
+                    lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
+                            - grad_CBF_disturbance @ d_hat
+                    H = np.eye(6)
+                    g = -speeds_in_cam_desired
 
-                # time3 = time.time()
-                cbf_qp.init(H, g, None, None, A_CBF, lb_CBF, None)
-                cbf_qp.solve()
-                # time4 = time.time()
+                    if i==0:
+                        cbf_qp.init(H, g, None, None, A_CBF, lb_CBF, None)
+                        cbf_qp.settings.eps_abs = 1.0e-9
+                        cbf_qp.solve()
+                    else:
+                        cbf_qp.settings.initial_guess = (
+                            proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                        )
+                        cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
+                        cbf_qp.settings.eps_abs = 1.0e-9
+                        cbf_qp.solve()
 
-                speeds_in_cam = cbf_qp.results.x
+                    speeds_in_cam = cbf_qp.results.x
+                else:
+                    speeds_in_cam = speeds_in_cam_desired
+                    print("CBF skipped")
+                    cvxpylayer_computation_time[i//step_every] = None
+                    cbf_value[i//step_every] = None
             else: 
                 speeds_in_cam = speeds_in_cam_desired
 
@@ -387,9 +411,17 @@ def main():
             H = J_camera.T @ J_camera
             g = - J_camera.T @ u_desired
             C = np.eye(9)*dt*step_every
-            inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
-            inv_kin_qp.solve()
-
+            if i == 0:
+                inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
+                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.solve()
+            else:
+                inv_kin_qp.settings.initial_guess = (
+                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                    )
+                inv_kin_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q)
+                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.solve()
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
@@ -432,8 +464,6 @@ def main():
                 cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
 
             # Step the simulation
-            
-            # print(time2-time1, time4-time3)
             info = env.step(vel, return_image=False)
 
             # Records
@@ -490,6 +520,20 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, cvxpylayer_computation_time, label="cvxpylayer_computation_time")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'cvxpylayer_computation_time.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, cbf_value, label="cbf_value")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'cbf_value.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
     plt.plot(times, vels)
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
@@ -511,7 +555,9 @@ def main():
                 'observer_errs': observer_errs,
                 'manipulability': manipulability,
                 'joint_vels': vels,
-                'joint_values': joint_values}
+                'joint_values': joint_values,
+                'cvxpylayer_computation_time': cvxpylayer_computation_time,
+                'cbf_value': cbf_value}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))
 
