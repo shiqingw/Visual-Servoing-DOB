@@ -3,7 +3,8 @@
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
-    "horizon": 1500,
+    "save_scaling_function": 0,
+    "horizon": 100,
     "step_every": 8,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
@@ -16,9 +17,9 @@
         "enable_gui_camera_data": 0,
         "obs_urdf": "box.urdf",
         "cameraDistance": 1.4,
-        "cameraYaw": 66.4,
-        "cameraPitch":-16.2,
-        "lookat":[0.0, 0.0, 0.0]
+        "cameraYaw": 0,
+        "cameraPitch":-30,
+        "lookat":[0.5, 0.0, 0.0]
     },
 
     "camera_config":{
@@ -66,12 +67,13 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 1e-4,
-        "solver_args": {"eps": 1e-7, "max_iters": 100}
+        "solver_args": {"eps": 1e-7, "max_iters": 1000000}
     },
 
     "CBF_config":{
         "active": 1,
-        "threshold": 1e20,
+        "threshold_ub": 88,
+        "threshold_lb": 46,
         "barrier_alpha": 1,
         "scaling_lb": 1.03,
         "compensation": 0.1

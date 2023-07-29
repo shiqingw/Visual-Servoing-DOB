@@ -1,7 +1,5 @@
 import copy
 from typing import Optional
-import pkgutil
-egl = pkgutil.get_loader('eglRenderer')
 
 import numpy as np
 import numpy.linalg as LA
@@ -11,6 +9,7 @@ import pybullet_data
 from gymnasium import Env, spaces
 from pinocchio.robot_wrapper import RobotWrapper
 from scipy.spatial.transform import Rotation
+
 
 import sys
 from pathlib import Path
