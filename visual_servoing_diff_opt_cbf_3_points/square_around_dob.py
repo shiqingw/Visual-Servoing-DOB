@@ -61,7 +61,7 @@ def point_in_image(x, y, width, height):
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=4, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -154,6 +154,7 @@ def main():
     dt = 1.0/240
     T = test_settings["horizon"]
     step_every = test_settings["step_every"]
+    save_every = test_settings["save_every"]
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
     mean_errs = np.zeros((num_data,2), dtype = np.float32)
@@ -378,10 +379,10 @@ def main():
                 # check if the obstacle is far to avoid numerical instability
                 A_obstacle_np = A_obstacle_val.detach().numpy()
                 b_obstacle_np = b_obstacle_val.detach().numpy()
-                tmp = corners @ A_obstacle_np.T - b_obstacle_np
-                tmp = np.sum(np.exp(kappa*tmp), axis=1)
-                
-                if np.min(tmp) <= CBF_config["threshold"] and np.max(tmp) != np.inf:
+                tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
+                tmp = np.max(tmp, axis=1)
+     
+                if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])
@@ -459,7 +460,7 @@ def main():
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
-            if test_settings["save_screeshot"] == 1:
+            if test_settings["save_screeshot"] == 1 and i % save_every == 0:
                 screenshot = p.getCameraImage(pixelWidth,
                                               pixelHeight,
                                               viewMatrix=viewMatrix,
@@ -472,16 +473,16 @@ def main():
                 screenshot = screenshot.convert('RGB')
                 screenshot.save(results_dir+'/screenshot_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
 
-            if test_settings["save_rgb"] == 1:
+            if test_settings["save_rgb"] == 1 and i % save_every == 0:
                 rgb_opengl = info["rgb"]
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
                 rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
 
-            if test_settings["save_depth"] == 1:
+            if test_settings["save_depth"] == 1 and i % save_every == 0:
                 plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
-            if test_settings["save_detection"] == 1:
+            if test_settings["save_detection"] == 1 and i % save_every == 0:
                 for ii in range(len(corners)):
                     x, y = corners[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
@@ -494,7 +495,7 @@ def main():
 
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
                 
-            if test_settings["save_scaling_function"] == 1:
+            if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
                 A_target_val = A_target_val.detach().numpy()

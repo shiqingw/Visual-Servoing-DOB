@@ -8,6 +8,7 @@
     "save_scaling_function": 0,
     "horizon": 1500,
     "step_every": 8,
+    "save_every": 32,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{
@@ -85,7 +86,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "threshold_ub": 88,
         "threshold_lb": 46,
         "barrier_alpha": 1,

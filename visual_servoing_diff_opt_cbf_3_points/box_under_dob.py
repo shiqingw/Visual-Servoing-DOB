@@ -144,6 +144,7 @@ def main():
     dt = 1.0/240
     T = test_settings["horizon"]
     step_every = test_settings["step_every"]
+    save_every = test_settings["save_every"]
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
     mean_errs = np.zeros((num_data,2), dtype = np.float32)
@@ -446,7 +447,7 @@ def main():
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
-            if test_settings["save_screeshot"] == 1:
+            if test_settings["save_screeshot"] == 1 and i % save_every == 0:
                 screenshot = p.getCameraImage(pixelWidth,
                                               pixelHeight,
                                               viewMatrix=viewMatrix,
@@ -459,16 +460,16 @@ def main():
                 screenshot = screenshot.convert('RGB')
                 screenshot.save(results_dir+'/screenshot_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
 
-            if test_settings["save_rgb"] == 1:
+            if test_settings["save_rgb"] == 1 and i % save_every == 0:
                 rgb_opengl = info["rgb"]
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
                 rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
                 
-            if test_settings["save_depth"] == 1:
+            if test_settings["save_depth"] == 1 and i % save_every == 0:
                 plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
-            if test_settings["save_detection"] == 1:
+            if test_settings["save_detection"] == 1 and i % save_every == 0:
                 for ii in range(len(corners)):
                     x, y = corners[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
@@ -478,7 +479,7 @@ def main():
 
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
             
-            if test_settings["save_scaling_function"] == 1:
+            if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
                 A_target_val = A_target_val.detach().numpy()
