@@ -1,10 +1,12 @@
 {
     "image_save_format": "png",
-    "save_rgb": 0,
+    "record": 1,
+    "save_screeshot": 1,
+    "save_rgb": 1,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
-    "horizon": 100,
+    "horizon": 1500,
     "step_every": 8,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
@@ -20,6 +22,18 @@
         "cameraYaw": 0,
         "cameraPitch":-30,
         "lookat":[0.5, 0.0, 0.0]
+    },
+
+    "screenshot_config":{
+        "cameraDistance": 0.8,
+        "cameraYaw": 0,
+        "cameraPitch":-30,
+        "lookat":[0.5, 0.0, 0.3],
+        "pixelWidth": 320,
+        "pixelHeight": 200,
+        "nearPlane": 0.01,
+        "farPlane": 100,
+        "fov": 90
     },
 
     "camera_config":{

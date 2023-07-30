@@ -82,6 +82,7 @@ def main():
         test_settings = json.load(f)
 
     simulator_config = test_settings["simulator_config"]
+    screenshot_config = test_settings["screenshot_config"]
     camera_config = test_settings["camera_config"]
     apriltag_config = test_settings["apriltag_config"]
     controller_config = test_settings["controller_config"]
@@ -101,14 +102,34 @@ def main():
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
 
-    env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path="results_diff_opt_3_points/exp_001/record.mp4")
-    # env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
+    if test_settings["record"] == 1:
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+    else:
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
     
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
                      lookat = lookat,
                      target_joint_angles = test_settings["initial_joint_angles"])
+    
+    # Pybullet GUI screenshot
+    cameraDistance = screenshot_config["cameraDistance"]
+    cameraYaw = screenshot_config["cameraYaw"]
+    cameraPitch = screenshot_config["cameraPitch"]
+    lookat = screenshot_config["lookat"]
+    pixelWidth = screenshot_config["pixelWidth"]
+    pixelHeight = screenshot_config["pixelHeight"]
+    nearPlane = screenshot_config["nearPlane"]
+    farPlane = screenshot_config["farPlane"]
+    fov = screenshot_config["fov"]
+    viewMatrix = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=lookat,
+                                                     distance=cameraDistance, 
+                                                     yaw=cameraYaw, 
+                                                     pitch=cameraPitch,
+                                                     roll = 0,
+                                                     upAxisIndex = 2)
+    projectionMatrix = p.computeProjectionMatrixFOV(fov, pixelWidth / pixelHeight, nearPlane, farPlane)
 
     # Reset apriltag position
     april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
@@ -425,14 +446,27 @@ def main():
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
 
+            if test_settings["save_screeshot"] == 1:
+                screenshot = p.getCameraImage(pixelWidth,
+                                              pixelHeight,
+                                              viewMatrix=viewMatrix,
+                                              projectionMatrix=projectionMatrix,
+                                              flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+                                              renderer=p.ER_BULLET_HARDWARE_OPENGL
+                                              )
+                screenshot = np.reshape(screenshot[2], (pixelHeight, pixelWidth, 4))
+                screenshot = Image.fromarray(screenshot)
+                screenshot = screenshot.convert('RGB')
+                screenshot.save(results_dir+'/screenshot_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
+
             if test_settings["save_rgb"] == 1:
                 rgb_opengl = info["rgb"]
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
-                rgbim_no_alpha.save(results_dir+'/rgb_'+str(i)+'.{}'.format(test_settings["image_save_format"]))
-
+                rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
+                
             if test_settings["save_depth"] == 1:
-                plt.imsave(results_dir+'/depth_'+str(i)+'.{}'.format(test_settings["image_save_format"]), depth_opengl)
+                plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
             if test_settings["save_detection"] == 1:
                 for ii in range(len(corners)):
@@ -442,26 +476,7 @@ def main():
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
-                A_target_val = A_target_val.detach().numpy()
-                b_target_val = b_target_val.detach().numpy()
-                A_obstacle_val = A_obstacle_val.detach().numpy()
-                b_obstacle_val = b_obstacle_val.detach().numpy()
-
-
-                for ii in range(camera_config["width"]):
-                    for jj in range(camera_config["height"]):
-                        pp = np.array([ii,jj])
-                        if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
-                            x, y = pp
-                            img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-                        if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
-                            x, y = pp
-                            img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-
-                x, y = p_sol.detach().numpy()
-                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-
-                cv2.imwrite(results_dir+'/detect_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
+                cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
             
             if test_settings["save_scaling_function"] == 1:
                 blank_img = np.ones_like(img)*255
@@ -480,7 +495,7 @@ def main():
                         if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
                             x, y = pp
                             img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
-                cv2.imwrite(results_dir+'/scaling_functions_'+str(i)+'.{}'.format(test_settings["image_save_format"]), img)
+                cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
 
             # Step the simulation
             info = env.step(vel, return_image=False)
