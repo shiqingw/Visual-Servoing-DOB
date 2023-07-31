@@ -1,14 +1,17 @@
 {
     "image_save_format": "png",
-    "record": 1,
-    "save_screeshot": 1,
-    "save_rgb": 1,
+    "record": 0,
+    "save_screeshot": 0,
+    "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
+    "visualize_target_traj": 0,
+    "visualize_camera_traj": 0,
     "horizon": 1500,
     "step_every": 8,
     "save_every": 24,
+    "zero_vel": 0,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{
@@ -31,7 +34,7 @@
         "cameraPitch":-30,
         "lookat":[0.5, 0.0, 0.3],
         "pixelWidth": 320,
-        "pixelHeight": 200,
+        "pixelHeight": 180,
         "nearPlane": 0.01,
         "farPlane": 100,
         "fov": 90
@@ -60,7 +63,7 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 1.0
+        "obstacle_alpha": 1
     },
 
     "controller_config":{
@@ -86,7 +89,7 @@
     },
 
     "CBF_config":{
-        "active": 0,
+        "active": 1,
         "cbf_value_record": 1,
         "threshold_ub": 88,
         "threshold_lb": 46,

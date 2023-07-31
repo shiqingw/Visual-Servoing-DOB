@@ -281,9 +281,13 @@ def main():
 
             coord_in_world = coord_in_cam @ H.T
 
-            # # Draw apritag vertices in world
-            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+            # Draw apritag vertices in world
+            if test_settings["visualize_target_traj"] == 1:
+                # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+                # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+                p.addUserDebugPoints([np.mean(coord_in_world[:,0:3], axis=0)], [[1.,0.,0.]], pointSize=5, lifeTime=0.01)
+            if test_settings["visualize_camera_traj"] == 1:
+                p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
             # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
@@ -535,6 +539,8 @@ def main():
                 cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
 
             # Step the simulation
+            if test_settings["zero_vel"] == 1:
+                vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
             # Records

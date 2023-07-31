@@ -30,7 +30,7 @@
         "cameraPitch":-30,
         "lookat":[0.5, 0.0, 0.3],
         "pixelWidth": 320,
-        "pixelHeight": 200,
+        "pixelHeight": 180,
         "nearPlane": 0.01,
         "farPlane": 100,
         "fov": 90
