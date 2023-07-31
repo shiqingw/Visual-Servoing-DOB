@@ -8,10 +8,12 @@
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
+    "visualize_target_traj_from_last": 1,
+    "visualize_camera_traj_from_last": 1,
+    "zero_vel": 0,
     "horizon": 1500,
     "step_every": 8,
     "save_every": 24,
-    "zero_vel": 0,
     "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{

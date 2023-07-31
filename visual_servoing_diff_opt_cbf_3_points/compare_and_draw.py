@@ -10,7 +10,8 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    exp_names = ['exp_001_w_cbf','exp_001_wo_cbf']
+    # exp_names = ['exp_001_w_cbf','exp_001_wo_cbf']
+    exp_names = ['exp_002_w_cbf','exp_002_wo_cbf']
     labels = ['w/ CBF', 'w/o CBF']
     linestyles = ['-', '--']
     label_fs = 35
@@ -41,6 +42,7 @@ if __name__ == '__main__':
     plt.ylabel('$h$ values', fontsize=label_fs)
     plt.xticks(fontsize = tick_fs)
     plt.yticks(fontsize = tick_fs)
+    plt.grid()
     plt.tight_layout()
     plt.draw()
     results_dir = "{}/results_diff_opt_3_points/exp_{:03d}".format(str(Path(__file__).parent.parent), 0)

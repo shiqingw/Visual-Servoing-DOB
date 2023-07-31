@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
-from utils.dict_utils import save_dict
+from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 
 
@@ -113,9 +113,11 @@ def main():
     robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
@@ -165,6 +167,8 @@ def main():
     joint_values = np.zeros((num_data,9), dtype = np.float32)
     cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
     cbf_value = np.zeros(num_data, dtype = np.float32)
+    obstacle_center = np.zeros((num_data,3), dtype = np.float32)
+    camera_position = np.zeros((num_data,3), dtype = np.float32)
 
     # Obstacle line
     obstacle_config = test_settings["obstacle_config"]
@@ -199,8 +203,6 @@ def main():
 
     obj = cp.Minimize(_alpha)
     cons = [cp.sum(cp.exp(kappa*(_A_target @ _p - _b_target))) <= nc_target*_alpha, cp.sum(cp.exp(kappa*(_A_obstacle @ _p - _b_obstacle))) <= nc_obstacle*_alpha]
-    # eps = 1
-    # cons = [cp.sum(cp.abs(_A_target @ _p - _b_target) + _A_target @ _p - _b_target) <= eps*_alpha, cp.sum(cp.abs(_A_obstacle @ _p - _b_obstacle) + _A_obstacle @ _p - _b_obstacle) <= eps*_alpha]
     problem = cp.Problem(obj, cons)
     assert problem.is_dpp()
 
@@ -231,7 +233,17 @@ def main():
     desired_coords = desired_coords*np.sqrt(old_variance_target) + old_mean_target
     mean_target = np.mean(desired_coords[0:num_points,:], axis=0)
     variance_target = np.var(desired_coords[0:num_points,:], axis = 0)
-    print(mean_target, variance_target)
+
+    # Display trajs from last
+    if test_settings["visualize_target_traj_from_last"] == 1:
+        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        summary = load_dict("{}/summary.npy".format(results_dir_keep))
+        p.addUserDebugPoints(summary["obstacle_center"], [[1.,0.,0.]]*len(summary["obstacle_center"]), pointSize=13, lifeTime=0.01)
+
+    if test_settings["visualize_camera_traj_from_last"] == 1:
+        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        summary = load_dict("{}/summary.npy".format(results_dir_keep))
+        p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=13, lifeTime=0.01)
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -294,9 +306,17 @@ def main():
 
             coord_in_world = coord_in_cam @ H.T
 
-            # # Draw apritag vertices in world
-            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+            # Record
+            obstacle_center[i//step_every,:] = np.mean(coord_in_world[:,0:3], axis=0)
+            camera_position[i//step_every,:] = np.reshape(info["P_CAMERA"],(1,3))
+
+            # Draw apritag vertices in world
+            if test_settings["visualize_target_traj"] == 1:
+                # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+                # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+                p.addUserDebugPoints([np.mean(coord_in_world[:,0:3], axis=0)], [[1.,0.,0.]], pointSize=5, lifeTime=0.01)
+            if test_settings["visualize_camera_traj"] == 1:
+                p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
             # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
@@ -550,6 +570,8 @@ def main():
                 cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
                 
             # Step the simulation
+            if test_settings["zero_vel"] == 1:
+                vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
             # Records
@@ -583,7 +605,9 @@ def main():
             'joint_values': joint_values,
             'cvxpylayer_computation_time': cvxpylayer_computation_time,
             'cbf_value': cbf_value,
-            'stop_ind': i//step_every}
+            'stop_ind': i//step_every,
+            'obstacle_center': obstacle_center,
+            'camera_position': camera_position}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))
     

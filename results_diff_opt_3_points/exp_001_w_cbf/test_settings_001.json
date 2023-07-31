@@ -6,6 +6,11 @@
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
+    "visualize_target_traj": 0,
+    "visualize_camera_traj": 0,
+    "visualize_target_traj_from_last": 0,
+    "visualize_camera_traj_from_last": 0,
+    "zero_vel": 0,
     "horizon": 1500,
     "step_every": 8,
     "save_every": 24,
@@ -60,7 +65,7 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 1.0
+        "obstacle_alpha": 1
     },
 
     "controller_config":{

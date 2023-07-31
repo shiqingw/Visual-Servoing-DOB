@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
-from utils.dict_utils import save_dict
+from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 
 
@@ -81,6 +81,7 @@ def main():
     with open(test_settings_path, "r", encoding="utf8") as f:
         test_settings = json.load(f)
 
+    # Various configs
     simulator_config = test_settings["simulator_config"]
     screenshot_config = test_settings["screenshot_config"]
     camera_config = test_settings["camera_config"]
@@ -89,10 +90,18 @@ def main():
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
     optimization_config = test_settings["optimization_config"]
+
+    # Joint limits
     joint_limits_config = test_settings["joint_limits_config"]
     joint_lb = np.array(joint_limits_config["lb"], dtype=np.float32)
     joint_ub = np.array(joint_limits_config["ub"], dtype=np.float32)
+
+    # Camera parameters
     intrinsic_matrix = np.array(camera_config["intrinsic_matrix"], dtype=np.float32)
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    x0 = intrinsic_matrix[0, 2]
+    y0 = intrinsic_matrix[1, 2]
 
     # Create and reset simulation
     enable_gui_camera_data = simulator_config["enable_gui_camera_data"]
@@ -155,6 +164,8 @@ def main():
     joint_values = np.zeros((num_data,9), dtype = np.float32)
     cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
     cbf_value = np.zeros(num_data, dtype = np.float32)
+    obstacle_center = np.zeros((num_data,3), dtype = np.float32)
+    camera_position = np.zeros((num_data,3), dtype = np.float32)
 
     # Obstacle line
     obstacle_config = test_settings["obstacle_config"]
@@ -219,6 +230,17 @@ def main():
     desired_coords = desired_coords*np.sqrt(old_variance_target) + old_mean_target
     mean_target = np.mean(desired_coords[0:num_points,:], axis=0)
     variance_target = np.var(desired_coords[0:num_points,:], axis = 0)
+
+    # Display trajs from last
+    if test_settings["visualize_target_traj_from_last"] == 1:
+        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        summary = load_dict("{}/summary.npy".format(results_dir_keep))
+        p.addUserDebugPoints(summary["obstacle_center"], [[1.,0.,0.]]*len(summary["obstacle_center"]), pointSize=13, lifeTime=0.01)
+
+    if test_settings["visualize_camera_traj_from_last"] == 1:
+        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        summary = load_dict("{}/summary.npy".format(results_dir_keep))
+        p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=13, lifeTime=0.01)
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -280,6 +302,10 @@ def main():
             H = np.vstack((_H, np.array([[0.0, 0.0, 0.0, 1.0]])))
 
             coord_in_world = coord_in_cam @ H.T
+
+            # Record
+            obstacle_center[i//step_every,:] = np.mean(coord_in_world[:,0:3], axis=0)
+            camera_position[i//step_every,:] = np.reshape(info["P_CAMERA"],(1,3))
 
             # Draw apritag vertices in world
             if test_settings["visualize_target_traj"] == 1:
@@ -574,7 +600,9 @@ def main():
             'joint_values': joint_values,
             'cvxpylayer_computation_time': cvxpylayer_computation_time,
             'cbf_value': cbf_value,
-            'stop_ind': i//step_every}
+            'stop_ind': i//step_every,
+            'obstacle_center': obstacle_center,
+            'camera_position': camera_position}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))
     
