@@ -427,6 +427,41 @@ def main():
                     cbf_value[i//step_every] = None
             else: 
                 speeds_in_cam = speeds_in_cam_desired
+                if CBF_config["cbf_value_record"] == 1:
+                    # Construct CBF and its constraint
+                    target_coords = torch.tensor(corners, dtype=torch.float32, requires_grad=True)
+                    x_target = target_coords[:,0]
+                    y_target = target_coords[:,1]
+                    A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
+                    b_target_val = -y_target*torch.roll(x_target,-1) + torch.roll(y_target,-1)*x_target
+
+                    obstacle_coords = torch.tensor(obstacle_corner_in_image, dtype=torch.float32, requires_grad=True)
+                    x_obstacle = obstacle_coords[:,0]
+                    y_obstacle = obstacle_coords[:,1]
+                    A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
+                    b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
+
+                    # check if the obstacle is far to avoid numerical instability
+                    A_obstacle_np = A_obstacle_val.detach().numpy()
+                    b_obstacle_np = b_obstacle_val.detach().numpy()
+                    tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
+                    tmp = np.max(tmp, axis=1)
+
+                    if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
+                        time1 = time.time()
+                        alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
+                                                    solver_args=optimization_config["solver_args"])
+                        CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
+                        # print(alpha_sol, p_sol)
+                        print(CBF)
+                        alpha_sol.backward()
+                        time2 = time.time()
+                        cvxpylayer_computation_time[i//step_every] = time2-time1
+                        cbf_value[i//step_every] = CBF
+                    else:
+                        print("CBF value skipped")
+                        cvxpylayer_computation_time[i//step_every] = None
+                        cbf_value[i//step_every] = None
 
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]
@@ -534,6 +569,19 @@ def main():
             print("Iter {:.2e}".format(i))
         
     env.close()
+
+    summary = {'times': times,
+            'mean_errs': mean_errs,
+            'orientation_errs': orientation_errs,
+            'observer_errs': observer_errs,
+            'manipulability': manipulability,
+            'joint_vels': vels,
+            'joint_values': joint_values,
+            'cvxpylayer_computation_time': cvxpylayer_computation_time,
+            'cbf_value': cbf_value,
+            'stop_ind': i//step_every}
+    print("==> Saving summary ...")
+    save_dict(summary, os.path.join(results_dir, "summary.npy"))
     
     print("==> Drawing plots ...")
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
@@ -595,19 +643,6 @@ def main():
         plt.axhline(y = joint_lb[i], color = 'black', linestyle = 'dotted')
         plt.savefig(os.path.join(results_dir, 'plot_joint_value_{}.png'.format(i)))
         plt.close(fig)
-
-    summary = {'times': times,
-                'mean_errs': mean_errs,
-                'orientation_errs': orientation_errs,
-                'observer_errs': observer_errs,
-                'manipulability': manipulability,
-                'joint_vels': vels,
-                'joint_values': joint_values,
-                'cvxpylayer_computation_time': cvxpylayer_computation_time,
-                'cbf_value': cbf_value}
-    print("==> Saving summary ...")
-    save_dict(summary, os.path.join(results_dir, "summary.npy"))
-
 
 if __name__ == "__main__":
     main()
