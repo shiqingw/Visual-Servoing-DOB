@@ -1,8 +1,8 @@
 {
     "image_save_format": "png",
-    "record": 1,
-    "save_screeshot": 1,
-    "save_rgb": 1,
+    "record": 0,
+    "save_screeshot": 0,
+    "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
@@ -92,7 +92,7 @@
     },
 
     "CBF_config":{
-        "active": 0,
+        "active": 1,
         "cbf_value_record": 1,
         "threshold_ub": 88,
         "threshold_lb": 46,
