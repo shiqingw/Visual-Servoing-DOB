@@ -1,0 +1,58 @@
+{
+    "image_save_format": "png",
+    "record": 0,
+    "save_screeshot": 0,
+    "save_rgb": 0,
+    "save_depth": 0,
+    "save_detection": 0,
+    "save_scaling_function": 0,
+    "zero_vel": 0,
+
+    "joint_limits_config":{
+        "lb":[-2.3093, -1.5133, -2.4937, -2.7478, -2.48, 0.8521, -2.6895, 0, 0],
+        "ub":[2.3093, 1.5133, 2.4937, -0.4461, 2.48, 4.2094, 2.6895, 0.04, 0.04]
+    },
+
+
+    "camera_config":{
+        "width": 848,
+        "height": 480,
+        "intrinsic_matrix": [[426.5440979003906,0.0, 424.68798828125], [0.0, 426.5440979003906, 239.35385131835938], [0.0, 0.0, 1.0]],
+        "depth_scale": 0.0010000000474974513
+    },
+
+    "obstacle_config":{
+        "lineFromXYZ": [0.8, -0.5, 0.25],
+        "lineToXYZ" : [0.8, 0.5, 0.25]
+    },
+
+    "controller_config":{
+        "mean_gain": [1.0,1.0],
+        "variance_gain": [0.6,0.6],
+        "variance_target": [2500, 2500],
+        "horizontal_gain": 1.0,
+        "vertical_gain": 0.0
+    },
+
+    "observer_config":{
+        "gain": [2,2],
+        "num_points": 4
+    },
+
+    "optimization_config":{
+        "n_cons_obstacle": 4,
+        "n_cons_target": 4,
+        "exp_coef": 1e-3,
+        "solver_args": {"eps": 1e-7, "max_iters": 100}
+    },
+
+    "CBF_config":{
+        "active": 1,
+        "cbf_value_record": 1,
+        "threshold_ub": 88,
+        "threshold_lb": 46,
+        "barrier_alpha": 1,
+        "scaling_lb": 1.03,
+        "compensation": 0.1
+    }
+}
