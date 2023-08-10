@@ -167,7 +167,7 @@ def main():
     joint_values = np.zeros((num_data,9), dtype = np.float32)
     cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
     cbf_value = np.zeros(num_data, dtype = np.float32)
-    obstacle_center = np.zeros((num_data,3), dtype = np.float32)
+    target_center = np.zeros((num_data,3), dtype = np.float32)
     camera_position = np.zeros((num_data,3), dtype = np.float32)
 
     # Obstacle line
@@ -238,7 +238,7 @@ def main():
     if test_settings["visualize_target_traj_from_last"] == 1:
         results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
-        p.addUserDebugPoints(summary["obstacle_center"], [[1.,0.,0.]]*len(summary["obstacle_center"]), pointSize=13, lifeTime=0.01)
+        p.addUserDebugPoints(summary["target_center"], [[1.,0.,0.]]*len(summary["target_center"]), pointSize=13, lifeTime=0.01)
 
     if test_settings["visualize_camera_traj_from_last"] == 1:
         results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
@@ -307,7 +307,7 @@ def main():
             coord_in_world = coord_in_cam @ H.T
 
             # Record
-            obstacle_center[i//step_every,:] = np.mean(coord_in_world[:,0:3], axis=0)
+            target_center[i//step_every,:] = np.mean(coord_in_world[:,0:3], axis=0)
             camera_position[i//step_every,:] = np.reshape(info["P_CAMERA"],(1,3))
 
             # Draw apritag vertices in world
@@ -503,14 +503,14 @@ def main():
             C = np.eye(9)*dt*step_every
             if i == 0:
                 inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
-                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.settings.eps_abs = 1.0e-9
                 inv_kin_qp.solve()
             else:
                 inv_kin_qp.settings.initial_guess = (
                         proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                     )
                 inv_kin_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q)
-                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.settings.eps_abs = 1.0e-9
                 inv_kin_qp.solve()
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
@@ -606,7 +606,7 @@ def main():
             'cvxpylayer_computation_time': cvxpylayer_computation_time,
             'cbf_value': cbf_value,
             'stop_ind': i//step_every,
-            'obstacle_center': obstacle_center,
+            'target_center': target_center,
             'camera_position': camera_position}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))

@@ -485,14 +485,14 @@ def main():
             C = np.eye(9)*dt*step_every
             if i == 0:
                 inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
-                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.settings.eps_abs = 1.0e-9
                 inv_kin_qp.solve()
             else:
                 inv_kin_qp.settings.initial_guess = (
                         proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                     )
                 inv_kin_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q)
-                cbf_qp.settings.eps_abs = 1.0e-9
+                inv_kin_qp.settings.eps_abs = 1.0e-9
                 inv_kin_qp.solve()
             vel = inv_kin_qp.results.x
             vel[-2:] = 0
