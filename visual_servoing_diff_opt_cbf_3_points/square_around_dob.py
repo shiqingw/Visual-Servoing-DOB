@@ -213,12 +213,18 @@ def main():
     n_eq = 0
     n_in = 1
     cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+    cbf_qp.init(np.eye(6), None, None, None, None, None, None)
+    cbf_qp.settings.eps_abs = 1.0e-9
+    cbf_qp.solve()
 
-    # Inverse kinematics with joint limits
+    # Joint limits QP
     n = 9
     n_eq = 0
     n_in = 9
-    inv_kin_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+    joint_limits_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
+    joint_limits_qp.init(np.eye(9), None, None, None, None, None, None)
+    joint_limits_qp.settings.eps_abs = 1.0e-9
+    joint_limits_qp.solve()
 
     # Adjust mean and variance target to 3 points
     num_points = 3
@@ -424,23 +430,18 @@ def main():
                     for ii in range(len(obstacle_coords_grad)):
                         actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian(obstacle_corner_in_cam[ii,0:3], fx, fy)
                     
+                    # CBF_QP
                     A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
                     lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
                             - grad_CBF_disturbance @ d_hat
                     H = np.eye(6)
                     g = -speeds_in_cam_desired
-
-                    if i==0:
-                        cbf_qp.init(H, g, None, None, A_CBF, lb_CBF, None)
-                        cbf_qp.settings.eps_abs = 1.0e-9
-                        cbf_qp.solve()
-                    else:
-                        cbf_qp.settings.initial_guess = (
-                            proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
-                        )
-                        cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
-                        cbf_qp.settings.eps_abs = 1.0e-9
-                        cbf_qp.solve()
+                    cbf_qp.settings.initial_guess = (
+                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                    )
+                    cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
+                    cbf_qp.settings.eps_abs = 1.0e-9
+                    cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
                 else: 
@@ -495,24 +496,28 @@ def main():
             omega_in_world = skew_to_vector(S_in_world)
             u_desired = np.hstack((v_in_world, omega_in_world))
 
-            # Inverse kinematic with joint limits
+            # Secondary objective: encourage the joints to stay in the middle of joint limits
+            W = np.diag(-1.0/(joint_ub-joint_lb)**2) /len(joint_lb)
             q = info["q"]
+            grad_joint = controller_config["joint_limit_gain"]* W @ (q - (joint_ub+joint_lb)/2)
+            
+            # Map the desired camera speed to joint velocities
             J_camera = info["J_CAMERA"]
-            H = J_camera.T @ J_camera
-            g = - J_camera.T @ u_desired
+            pinv_J_camera = LA.pinv(J_camera)
+            dq_nominal = pinv_J_camera @ u_desired + (np.eye(9) - pinv_J_camera @ J_camera) @ grad_joint
+
+            # QP-for joint limits
+            q = info["q"]
+            H = np.eye(9)
+            g = - dq_nominal
             C = np.eye(9)*dt*step_every
-            if i == 0:
-                inv_kin_qp.init(H, g, None, None, C, joint_lb - q, joint_ub - q)
-                inv_kin_qp.settings.eps_abs = 1.0e-9
-                inv_kin_qp.solve()
-            else:
-                inv_kin_qp.settings.initial_guess = (
-                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
-                    )
-                inv_kin_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q)
-                inv_kin_qp.settings.eps_abs = 1.0e-9
-                inv_kin_qp.solve()
-            vel = inv_kin_qp.results.x
+            joint_limits_qp.settings.initial_guess = (
+                    proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
+                )
+            joint_limits_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q, C=C)
+            joint_limits_qp.settings.eps_abs = 1.0e-9
+            joint_limits_qp.solve()
+            vel = joint_limits_qp.results.x
             vel[-2:] = 0
 
             if test_settings["save_screeshot"] == 1 and i % save_every == 0:

@@ -73,7 +73,7 @@
         "variance_gain": [0.6,0.6],
         "variance_target": [2500, 2500],
         "horizontal_gain": 1.0,
-        "vertical_gain": 0.0,
+        "vertical_gain": 1.0,
         "manipulability_gain": 10,
         "joint_limit_gain": 10
     },
