@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 
@@ -31,10 +31,10 @@ from configuration import Configuration
 def axis_angle_from_rot_mat(rot_mat):
     rotation = R.from_matrix(rot_mat)
     axis_angle = rotation.as_rotvec()
-    angle = LA.norm(axis_angle)
-    axis = axis_angle / angle
-
-    return axis, angle
+    # angle = LA.norm(axis_angle)
+    # axis = axis_angle / angle
+    
+    return axis_angle
 
 def one_point_image_jacobian(coord_in_cam, fx, fy):
     X = coord_in_cam[0]
@@ -61,7 +61,7 @@ def point_in_image(x, y, width, height):
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=4, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=7, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -110,12 +110,15 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
+    robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
-    
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+ 
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
@@ -156,8 +159,8 @@ def main():
     save_every = test_settings["save_every"]
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
-    mean_errs = np.zeros((num_data,2), dtype = np.float32)
     position_errs = np.zeros((num_data,3), dtype = np.float32)
+    axis_angle_errs = np.zeros((num_data,3), dtype = np.float32)
     observer_errs = np.zeros(num_data, dtype = np.float32)
     manipulability = np.zeros(num_data, dtype = np.float32)
     vels = np.zeros((num_data,9), dtype = np.float32)
@@ -176,8 +179,8 @@ def main():
     #                    lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
@@ -253,7 +256,6 @@ def main():
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2 + 0.0*i*dt])
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
@@ -270,6 +272,9 @@ def main():
             if len(result) == 0:
                 break
             corners = result[0].corners
+            camera_params = [fx, fy, x0, y0]
+            tag_size = apriltag_config["tag_size"]
+            pose, _, _ = detector.detection_pose(result[0], camera_params, tag_size=tag_size, z_sign=1)
 
             # Break if corner out of image
             if_in = np.zeros(4, dtype=bool)
@@ -316,13 +321,15 @@ def main():
 
             # Draw apritag vertices in world
             if test_settings["visualize_target_traj"] == 1:
-                # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-                # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
                 p.addUserDebugPoints([np.mean(coord_in_world[:,0:3], axis=0)], [[1.,0.,0.]], pointSize=5, lifeTime=0.01)
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw obstacle vertices in world
+            # # Draw apritag vertices in world
+            # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+            # p.addUserDebugPoints(coord_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
+
+            # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -333,29 +340,19 @@ def main():
             for ii in range(len(corners)):
                 J_image_cam[2*ii:2*ii+2] = one_point_image_jacobian(coord_in_cam[ii], fx, fy)
 
-            # Compute desired pixel velocity (mean)
-            mean_gain = np.diag(controller_config["mean_gain"])
-            J_mean = 1/num_points*np.tile(np.eye(2), num_points)
-            error_mean = np.mean(corners[0:num_points,:], axis=0) - mean_target
-            xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
-
-            # Compute desired pixel velocity (variance)
-            variance_gain = np.diag(controller_config["variance_gain"])
-            J_variance = np.tile(- np.diag(np.mean(corners[0:num_points,:], axis=0)), num_points)
-            J_variance[0,0::2] += corners[0:num_points,0]
-            J_variance[1,1::2] += corners[0:num_points,1]
-            J_variance = 2/num_points*J_variance
-            error_variance = np.var(corners[0:num_points,:], axis = 0) - variance_target
-            xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
-
-            # Compute desired pixel velocity (position)
-            fix_position_gain = np.diag(controller_config["fix_position_gain"])
-            tmp = corners - desired_coords
-            error_position = np.sum(tmp**2, axis=1)[0:num_points]
-            J_position = np.zeros((num_points, 2*num_points), dtype=np.float32)
-            for ii in range(num_points):
-                J_position[ii, 2*ii:2*ii+2] = tmp[ii,:]
-            xd_yd_position = - LA.pinv(J_position) @ fix_position_gain @ error_position
+            # PBVS
+            current_position = pose[0:3,3]
+            current_rotation_matrix = pose[0:3,0:3]
+            current_axis_angle = axis_angle_from_rot_mat(current_rotation_matrix)
+            R_desired = np.eye(3)
+            # R_desired = np.diag([1,-1,-1])
+            desired_axis_angle = axis_angle_from_rot_mat(R_desired)
+            desired_position = np.array(controller_config["desired_relative_position"], dtype=np.float32)
+            error_axis_angle = current_axis_angle - desired_axis_angle
+            error_position = current_position - desired_position
+            omega_in_cam = controller_config["pbvs_gain_omega"] * error_axis_angle
+            v_in_cam = -controller_config["pbvs_gain_v"] * (-error_position - skew(current_position) @ error_axis_angle)
+            speeds_in_cam_desired = np.hstack((v_in_cam, omega_in_cam))
 
             # Speed contribution due to movement of the apriltag
             apriltag_speed_in_cam = info["R_CAMERA"] @ apriltag_speed_in_world
@@ -363,19 +360,6 @@ def main():
 
             # Update the observer
             d_hat = observer_gain @ np.reshape(corners, (2*len(corners),)) - epsilon
-
-            # Map to the camera speed expressed in the camera frame
-            null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
-            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
-            xd_yd = xd_yd_position + null_position @ xd_yd_mean
-            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
-            J_active = J_image_cam[0:2*num_points]
-            if observer_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
-            else:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -403,8 +387,7 @@ def main():
                 tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
      
-                # if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
-                if np.max(tmp) <= CBF_config["threshold_ub"]:
+                if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])
@@ -440,7 +423,6 @@ def main():
                     cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
-
                 else: 
                     speeds_in_cam = speeds_in_cam_desired
                     print("CBF skipped")
@@ -535,7 +517,7 @@ def main():
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
                 rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
-                
+
             if test_settings["save_depth"] == 1 and i % save_every == 0:
                 plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
@@ -547,8 +529,11 @@ def main():
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
+                x, y = p_sol.detach().numpy()
+                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-            
+                
             if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
@@ -567,14 +552,14 @@ def main():
                             x, y = pp
                             img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
                 cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-
+                
             # Step the simulation
             if test_settings["zero_vel"] == 1:
                 vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
             # Records
-            mean_errs[i//step_every,:] = error_mean
+            axis_angle_errs[i//step_every,:] = error_axis_angle
             position_errs[i//step_every,:] = error_position
             observer_errs[i//step_every] = LA.norm(d_hat - d_true)
             manipulability[i//step_every] = np.sqrt(LA.det(J_camera @ J_camera.T))
@@ -596,7 +581,7 @@ def main():
     env.close()
 
     summary = {'times': times,
-            'mean_errs': mean_errs,
+            'axis_angle_errs': axis_angle_errs,
             'position_errs': position_errs,
             'observer_errs': observer_errs,
             'manipulability': manipulability,
@@ -612,11 +597,12 @@ def main():
     
     print("==> Drawing plots ...")
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, mean_errs[:,0], label="x")
-    plt.plot(times, mean_errs[:,1], label="y")
+    plt.plot(times, axis_angle_errs[:,0], label="x")
+    plt.plot(times, axis_angle_errs[:,1], label="y")
+    plt.plot(times, axis_angle_errs[:,2], label="z")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'plot_mean_errs.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_axis_angle_errs.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)

@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 
@@ -61,7 +61,7 @@ def point_in_image(x, y, width, height):
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=4, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=6, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -110,12 +110,15 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
+    robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
-    
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+ 
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
@@ -176,8 +179,8 @@ def main():
     #                    lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
@@ -253,7 +256,6 @@ def main():
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2 + 0.0*i*dt])
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
@@ -276,15 +278,15 @@ def main():
             for ii in range(len(corners)):
                 x, y = corners[ii,:]
                 if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
-
             if np.sum(if_in) != len(corners):
                 break
-
+            
             # Use cv2 window to display image
             if enable_gui_camera_data == 0:
                 cv2.namedWindow("RGB")
                 BGR = cv2.cvtColor(rgb_opengl, cv2.COLOR_RGB2BGR)
                 cv2.imshow("RGB", BGR)
+
             # Initialize the observer such that d_hat = 0 at t = 0
             if i == 0:
                 epsilon = observer_gain @ np.reshape(corners, (2*len(corners),))
@@ -293,12 +295,12 @@ def main():
             near = camera_config["near"]
             far = camera_config["far"]
             depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
-
+            
             corner_depths = np.zeros([corners.shape[0],1], dtype=np.float32)
             for ii in range(len(corners)):
                 x, y = corners[ii,:]
                 corner_depths[ii] = depth_opengl[int(y), int(x)]
-
+            
             pixel_coord = np.hstack((corners, np.ones((corners.shape[0],1), dtype=np.float32)))
             pixel_coord_denomalized = pixel_coord*corner_depths
             
@@ -322,7 +324,7 @@ def main():
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw obstacle vertices in world
+            # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -371,11 +373,13 @@ def main():
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             xd_yd = xd_yd_position + null_position @ xd_yd_mean
             # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
+            # xd_yd = xd_yd_position
             J_active = J_image_cam[0:2*num_points]
+
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 10*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
             else:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 10*np.eye(2*num_points)) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -403,8 +407,7 @@ def main():
                 tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
      
-                # if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
-                if np.max(tmp) <= CBF_config["threshold_ub"]:
+                if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])
@@ -440,7 +443,6 @@ def main():
                     cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
-
                 else: 
                     speeds_in_cam = speeds_in_cam_desired
                     print("CBF skipped")
@@ -535,7 +537,7 @@ def main():
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
                 rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
-                
+
             if test_settings["save_depth"] == 1 and i % save_every == 0:
                 plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
@@ -547,8 +549,11 @@ def main():
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
+                x, y = p_sol.detach().numpy()
+                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-            
+                
             if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
@@ -567,7 +572,7 @@ def main():
                             x, y = pp
                             img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
                 cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-
+                
             # Step the simulation
             if test_settings["zero_vel"] == 1:
                 vel = np.zeros_like(vel)
