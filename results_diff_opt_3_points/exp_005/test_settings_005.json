@@ -5,9 +5,16 @@
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
-    "horizon": 2000,
+    "save_scaling_function": 0,
+    "visualize_target_traj": 0,
+    "visualize_camera_traj": 0,
+    "visualize_target_traj_from_last": 0,
+    "visualize_camera_traj_from_last": 0,
+    "zero_vel": 0,
+    "horizon": 1500,
     "step_every": 8,
-    "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
+    "save_every": 24,
+    "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{
         "lb":[-2.3093, -1.5133, -2.4937, -2.7478, -2.48, 0.8521, -2.6895, 0, 0],
@@ -16,12 +23,11 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "square1.urdf",
+        "obs_urdf": "box.urdf",
         "cameraDistance": 1.4,
-        "cameraYaw": 66.4,
-        "cameraPitch":-16.2,
-        "lookat":[0.8, 0.0, 0.25],
-        "robot_base_p_offset": [0,0,0.2]
+        "cameraYaw": 0,
+        "cameraPitch":-30,
+        "lookat":[0.5, 0.0, 0.0]
     },
 
     "screenshot_config":{
@@ -39,37 +45,45 @@
     "camera_config":{
         "width": 1280,
         "height": 720,
-        "near": 0.12,
-        "far": 3.0,
+        "near": 0.02,
+        "far": 2.0,
         "fov": 60,
         "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
     },
 
     "apriltag_config":{
-        "initial_position": [0.40, -0.5, 0.005],
-        "linear_velocity": [0.0, 0.1, 0.0]
+        "apriltag_radius": 0.15,
+        "initial_position": [0.7, 0.0, 0.005],
+        "center_position": [0.85, 0.0, 0.005],
+        "augular_velocity": 1,
+        "offset_angle": 3.14,
+        "tag_size": 0.136
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.34, -0.05, 0.30],
-        "lineToXYZ" : [0.34, 0.05, 0.30],
+        "lineFromXYZ": [0.8, -0.5, 0.25],
+        "lineToXYZ" : [0.8, 0.5, 0.25],
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 0.3
+        "obstacle_alpha": 1
     },
 
     "controller_config":{
         "mean_gain": [1.0,1.0],
-        "variance_gain": [1.0,1.0],
+        "variance_gain": [0.6,0.6],
         "variance_target": [3000, 3000],
         "horizontal_gain": 1.0,
         "vertical_gain": 1.0,
         "fix_position_gain": [1.0,1.0,1.0],
-        "joint_limit_gain": 10
+        "joint_limit_gain": 10,
+        "desired_relative_position": [0,0,0.5],
+        "pbvs_gain_v": 1,
+        "pbvs_gain_omega": 1
     },
 
     "observer_config":{
+        "active": 1,
         "gain": [2,2],
         "num_points": 4
     },
@@ -78,15 +92,16 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 1e-4,
-        "solver_args": {"eps": 1e-7, "max_iters": 150}
+        "solver_args": {"eps": 1e-7, "max_iters": 10000}
     },
 
     "CBF_config":{
         "active": 1,
-        "threshold_ub": 88,
-        "threshold_lb": 46,
-        "barrier_alpha": 1.0,
+        "cbf_value_record": 1,
+        "threshold_ub": 800,
+        "threshold_lb": 100,
+        "barrier_alpha": 1,
         "scaling_lb": 1.03,
-        "compensation": 1.0
+        "compensation": 2
     }
 }

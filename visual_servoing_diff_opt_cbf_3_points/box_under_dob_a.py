@@ -377,7 +377,10 @@ def main():
             null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
             J_active = J_image_cam[0:2*num_points]
-            speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+            if observer_config["active"] == 1:
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+            else:
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 

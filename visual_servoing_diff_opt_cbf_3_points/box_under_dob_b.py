@@ -367,7 +367,10 @@ def main():
             # Map to the camera speed expressed in the camera frame
             null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
+            null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
+            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
+            xd_yd = xd_yd_position + null_position @ xd_yd_mean
+            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
             J_active = J_image_cam[0:2*num_points]
             if observer_config["active"] == 1:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
@@ -399,8 +402,10 @@ def main():
                 b_obstacle_np = b_obstacle_val.detach().numpy()
                 tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
+                print(tmp)
      
-                if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
+                # if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
+                if np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])

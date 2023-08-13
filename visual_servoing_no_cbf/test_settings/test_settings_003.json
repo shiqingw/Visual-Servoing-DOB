@@ -1,6 +1,6 @@
 {
     "image_save_format": "png",
-    "record": 0,
+    "record": 1,
     "save_screeshot": 0,
     "save_rgb": 0,
     "save_depth": 0,
@@ -57,7 +57,7 @@
         "center_position": [0.7, 0.0, 0.005],
         "augular_velocity": 1,
         "offset_angle": 3.14,
-        "tag_size": 0.172
+        "tag_size": 0.136
     },
 
     "obstacle_config":{
@@ -76,7 +76,10 @@
         "horizontal_gain": 1.0,
         "vertical_gain": 1.0,
         "fix_position_gain": [1.0,1.0,1.0],
-        "joint_limit_gain": 10
+        "joint_limit_gain": 10,
+        "desired_relative_position": [0,0,0.5],
+        "pbvs_gain_v": 1,
+        "pbvs_gain_omega": 1
     },
 
     "observer_config":{

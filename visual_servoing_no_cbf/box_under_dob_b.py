@@ -253,7 +253,7 @@ def main():
         apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2 + 0.1*i*dt])
+        april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2 + 0.0*i*dt])
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
         apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
         last_apriltag_position = apriltag_position
@@ -367,8 +367,8 @@ def main():
             # Map to the camera speed expressed in the camera frame
             null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
-            # xd_yd = xd_yd_mean + null_mean  @ xd_yd_position
+            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
+            xd_yd = xd_yd_position
             J_active = J_image_cam[0:2*num_points]
             if observer_config["active"] == 1:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])

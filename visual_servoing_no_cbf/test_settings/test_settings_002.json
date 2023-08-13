@@ -71,7 +71,7 @@
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [0.6,0.6],
-        "variance_target": [4000, 4000],
+        "variance_target": [6000, 6000],
         "horizontal_gain": 1.0,
         "vertical_gain": 1.0,
         "fix_position_gain": [1.0,1.0,1.0],

@@ -382,6 +382,11 @@ def main():
             J_active = J_image_cam[0:2*num_points]
             speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 10*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
 
+            if observer_config["active"] == 1:
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+            else:
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
             obstacle_corner_in_image = obstacle_corner_in_cam[:,0:3] @ intrinsic_matrix.T
