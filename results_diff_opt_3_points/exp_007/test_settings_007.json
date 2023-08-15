@@ -11,7 +11,7 @@
     "visualize_target_traj_from_last": 0,
     "visualize_camera_traj_from_last": 0,
     "zero_vel": 0,
-    "horizon": 2200,
+    "horizon": 2300,
     "step_every": 8,
     "save_every": 24,
     "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],

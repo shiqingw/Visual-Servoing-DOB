@@ -578,6 +578,18 @@ def main():
                 vel = np.zeros_like(vel)
             info = env.step(vel, return_image=False)
 
+            # Step the observer
+            dq_executed = vel
+            speeds_in_world = J_camera @ dq_executed
+            v_in_world = speeds_in_world[0:3]
+            omega_in_world = speeds_in_world[3:6]
+            R_world_to_cam = info["R_CAMERA"].T
+            v_in_cam = R_world_to_cam @ v_in_world
+            S_in_cam = R_world_to_cam @ skew(omega_in_world) @ R_world_to_cam.T
+            omega_in_cam = skew_to_vector(S_in_cam)
+            speeds_in_cam = np.hstack((v_in_cam, omega_in_cam))
+            epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
+
             # Records
             mean_errs[i//step_every,:] = error_mean
             position_errs[i//step_every,:] = error_position
@@ -585,10 +597,6 @@ def main():
             manipulability[i//step_every] = np.sqrt(LA.det(J_camera @ J_camera.T))
             vels[i//step_every] = vel
             joint_values[i//step_every] = q
-
-            # Step the observer
-            epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
-
 
         else:
             info = env.step(vel)

@@ -52,9 +52,9 @@
     },
 
     "apriltag_config":{
-        "apriltag_radius": 0.10,
-        "initial_position": [0.6, 0.0, 0.005],
-        "center_position": [0.7, 0.0, 0.005],
+        "apriltag_radius": 0.15,
+        "initial_position": [0.7, 0.0, 0.005],
+        "center_position": [0.85, 0.0, 0.005],
         "augular_velocity": 1,
         "offset_angle": 3.14
     },
@@ -65,22 +65,22 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 0.3
+        "obstacle_alpha": 1
     },
 
     "controller_config":{
         "mean_gain": [1.0,1.0],
         "variance_gain": [0.6,0.6],
-        "variance_target": [6000, 6000],
+        "variance_target": [2500, 2500],
         "horizontal_gain": 1.0,
         "vertical_gain": 1.0,
-        "fix_position_gain": [1.0,1.0,1.0],
+        "manipulability_gain": 10,
         "joint_limit_gain": 10
     },
 
     "observer_config":{
-        "active": 0,
-        "gain": [2.0,2.0],
+        "active": 1,
+        "gain": [2,2],
         "num_points": 4
     },
 
@@ -92,8 +92,8 @@
     },
 
     "CBF_config":{
-        "active": 0,
-        "cbf_value_record": 0,
+        "active": 1,
+        "cbf_value_record": 1,
         "threshold_ub": 88,
         "threshold_lb": 46,
         "barrier_alpha": 1,
