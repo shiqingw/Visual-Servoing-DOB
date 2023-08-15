@@ -1,0 +1,212 @@
+import numpy as np
+from sympy import Matrix, cos, diff, lambdify, simplify, sin, symbols
+
+class EKF_IBVS_One_Point(object):
+    """EKF for IBVS with image points features. Note, the image point (x,y) should be 
+        transformed to ((x-cx)/fx, (y-cy)/fy) before passing to this class, where
+            fx (float): focal length in x direction
+            fy (float): focal length in y direction
+            cx (float): principal point in x direction
+            cy (float): principal point in y direction
+        Implemented based on Eq 12 in Towards Dynamic Visual Servoing for Interaction
+        Control and Moving Targets, ICRA 2022.
+    """
+    def __init__(self, dt, x0, P0, Q, R):   
+        """Initialize EKF for IBVS.
+
+        Args:
+            dt (float): sampling time
+            x0 (np.array): initial state, size 9
+            P0 (np.array): initial covariance, size 9x9
+            Q (np.array): process noise covariance, size 9x9
+            R (np.array): measurement noise covariance, size 3x3
+        
+        """
+
+        self.dt = dt
+        self.x = x0
+        self.P = P0
+        self.Q = Q
+        self.R = R
+        self.P_pre = P0
+        self.x_pre = x0
+
+        # Define symbolic variables
+        x, y, Z, d1, d2, d3, dd1, dd2, dd3 = symbols('x y Z d1 d2 d3 dd1 dd2 dd3')
+        Vx, Vy, Vz, Wx, Wy, Wz = symbols('Vx Vy Vz Wx Wy Wz')
+
+        # Define continuous dynamics
+        dot_x_y_Z = Matrix([[-1/Z, 0, x/Z, x*y, -(1+x**2), y],
+                    [0, -1/Z, y/Z, 1+y**2, -x*y, -x],
+                    [0, 0, -1, -y*Z, x*Z, 0]]) @ Matrix([[Vx], [Vy], [Vz], [Wx], [Wy], [Wz]]) + Matrix([[dd1], [dd2], [dd3]])
+        dot_d = Matrix([[dd1], [dd2], [dd3]])
+        dot_dot_d = Matrix([[0], [0], [0]])
+        continuous_dynamics = Matrix.vstack(dot_x_y_Z, dot_d, dot_dot_d)
+
+        # Define discrete dynamics
+        discrete_dynamics = continuous_dynamics * dt + Matrix([[x], [y], [Z], [d1], [d2], [d3], [dd1], [dd2], [dd3]])
+        self.discrete_dynamics = lambdify([x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_dynamics, "numpy")
+
+        # Define process partial derivatives
+        discrete_process_jacobian = simplify(discrete_dynamics.jacobian(Matrix([x, y, Z, d1, d2, d3, dd1, dd2, dd3])))
+        self.discrete_process_jacobian = lambdify([x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_process_jacobian, "numpy")
+
+        # Define measurement partial derivatives
+        self.measurement_jacobian = np.eye(3,9)
+
+    def predict(self, u):
+        """
+        Step the EKF without updating with measurements. 
+        u = [Vx Vy Vz Wx Wy Wz] is the control input, all expressed in the camera frame.
+        Args:   
+            u (np.array): control input, size 6
+        """
+        # Update state
+        if u.ndim > 1:
+            u = np.squeeze(u)
+
+        self.x_pre = np.squeeze(self.discrete_dynamics(*self.x_pre, *u))
+
+        # Update covariance
+        A = self.discrete_process_jacobian(*self.x_pre, *u)
+        self.P_pre = A @ self.P_pre @ A.T + self.Q
+    
+    def update(self, z):
+        """
+        Update the EKF with measurements.
+        z = [x y Z] is the image point feature, expressed in the camera frame.
+        Args:
+            z (np.array): measurement, size 3
+        """
+        if z.ndim > 1:
+            z = np.squeeze(z)
+
+        # Compute Kalman gain
+        C = self.measurement_jacobian
+        K = self.P_pre @ C.T @ np.linalg.inv(C @ self.P_pre @ C.T + self.R)
+        # Update state
+        tmp_x = self.x_pre + K @ (z - self.x_pre[:3])
+        self.x = tmp_x
+        # Update covariance
+        tmp_P = (np.eye(9) - K @ C) @ self.P_pre
+        self.P = tmp_P
+        # Update pre state and covariance. This is for the stepping the EKF without updating with measurements.
+        self.x_pre = tmp_x
+        self.P_pre = tmp_P
+
+
+class EKF_IBVS(object):
+    """EKF for IBVS with image points features. This is a collection many EKF_IBVS_One_Point.
+    """
+    def __init__(self, dt, num_points, x0, P0, Q, R, fx, fy, cx, cy):   
+        """
+        Args:
+            dt: time interval between two frames
+            num_points: number of points features
+            x0: initial state, size 9xnum_points
+            P0: initial covariance, size 9x9
+            Q: process noise covariance, size 9x9
+            R: measurement noise covariance, size 3x3
+            fx: focal length in x axis, float
+            fy: focal length in y axis, float
+            cx: principal point in x axis, float
+            cy: principal point in y axis, float
+        """
+        # Record the camera parameters.
+        self.fx = fx
+        self.fy = fy
+        self.cx = cx
+        self.cy = cy
+
+        # Check the size of x0.
+        if x0.shape != (9, num_points):
+            raise ValueError('x0 should have size 9xnum_points.')
+        
+        # Transform (x,y) to ((x-cx)/fx, (y-cy)/fy) before passing to EKF_IBVS_One_Point.
+        x0[0,:] = (x0[0,:] - cx) / fx
+        x0[1,:] = (x0[1,:] - cy) / fy
+
+        # Create an EKF for each point feature.
+        self.ekf_list = []
+        for i in range(num_points):
+            self.ekf_list.append(EKF_IBVS_One_Point(dt, x0[:,i], P0, Q, R))
+
+    def predict(self, u):
+        """Predict the state and covariance of each EKF.
+        Args:
+            u: control input, size 6x1
+        """
+        for ekf in self.ekf_list:
+            ekf.predict(u)
+
+    def update(self, z):
+        """Update the state and covariance of each EKF.
+        Args:
+            z: measurement, size 3xnum_points
+        """
+        #Transform (x,y) to ((x-cx)/fx, (y-cy)/fy) before passing to EKF_IBVS_One_Point.
+        z[0,:] = (z[0,:] - self.cx) / self.fx
+        z[1,:] = (z[1,:] - self.cy) / self.fy
+
+        for i, ekf in enumerate(self.ekf_list):
+            ekf.update(z[:,i])
+    
+    def get_updated_state(self):
+        """Get the state of all EKF.
+        Returns:
+            x: state, size 9xnum_points
+        """
+        x = np.zeros((9, len(self.ekf_list)))
+        for i, ekf in enumerate(self.ekf_list):
+            x[:,i] = ekf.x
+        
+        # Transform (x,y) to (x*fx+cx, y*fy+cy) before returning.
+        x[0,:] = x[0,:] * self.fx + self.cx
+        x[1,:] = x[1,:] * self.fy + self.cy
+
+        # Transform (d1,d2,d3) to (d1*fx,d2*fy,d3) before returning.
+        x[3,:] = x[3,:] * self.fx
+        x[4,:] = x[4,:] * self.fy
+
+        return x
+    
+    def get_updated_covariance(self):
+        """Get the covariance of all EKF.
+        Returns:
+            P: covariance, size num_pointsx9x9
+        """
+        P = np.zeros((len(self.ekf_list), 9, 9))
+        for i, ekf in enumerate(self.ekf_list):
+            P[i,:,:] = ekf.P
+        return P
+    
+    def get_predicted_state(self):
+        """Get the predicted state of all EKF.
+        Returns:
+            x: state, size 9xnum_points
+        """
+        x = np.zeros((9, len(self.ekf_list)))
+        for i, ekf in enumerate(self.ekf_list):
+            x[:,i] = ekf.x_pre
+        
+        # Transform (x,y) to (x*fx+cx, y*fy+cy) before returning.
+        x[0,:] = x[0,:] * self.fx + self.cx
+        x[1,:] = x[1,:] * self.fy + self.cy
+
+        # Transform (d1,d2,d3) to (d1*fx,d2*fy,d3) before returning.
+        x[3,:] = x[3,:] * self.fx
+        x[4,:] = x[4,:] * self.fy
+
+        return x
+    
+    def get_predicted_covariance(self):
+        """Get the predicted covariance of all EKF.
+        Returns:
+            P: covariance, size 9x9xnum_points
+        """
+        P = np.zeros((len(self.ekf_list), 9, 9))
+        for i, ekf in enumerate(self.ekf_list):
+            P[i,:,:] = ekf.P_pre
+        return P
+
+
