@@ -38,7 +38,7 @@ class EKF_IBVS_One_Point(object):
         # Define continuous dynamics
         dot_x_y_Z = Matrix([[-1/Z, 0, x/Z, x*y, -(1+x**2), y],
                     [0, -1/Z, y/Z, 1+y**2, -x*y, -x],
-                    [0, 0, -1, -y*Z, x*Z, 0]]) @ Matrix([[Vx], [Vy], [Vz], [Wx], [Wy], [Wz]]) + Matrix([[dd1], [dd2], [dd3]])
+                    [0, 0, -1, -y*Z, x*Z, 0]]) @ Matrix([[Vx], [Vy], [Vz], [Wx], [Wy], [Wz]]) + Matrix([[d1], [d2], [d3]])
         dot_d = Matrix([[dd1], [dd2], [dd3]])
         dot_dot_d = Matrix([[0], [0], [0]])
         continuous_dynamics = Matrix.vstack(dot_x_y_Z, dot_d, dot_dot_d)
@@ -69,7 +69,7 @@ class EKF_IBVS_One_Point(object):
 
         # Update covariance
         A = self.discrete_process_jacobian(*self.x_pre, *u)
-        self.P_pre = A @ self.P_pre @ A.T + self.Q
+        self.P_pre = A @ self.P_pre @ A.T + self.Q * self.dt
     
     def update(self, z):
         """
@@ -103,7 +103,7 @@ class EKF_IBVS(object):
         Args:
             dt: time interval between two frames
             num_points: number of points features
-            x0: initial state, size 9xnum_points
+            x0: initial state, size num_pointsx9
             P0: initial covariance, size 9x9
             Q: process noise covariance, size 9x9
             R: measurement noise covariance, size 3x3
@@ -119,17 +119,17 @@ class EKF_IBVS(object):
         self.cy = cy
 
         # Check the size of x0.
-        if x0.shape != (9, num_points):
-            raise ValueError('x0 should have size 9xnum_points.')
+        if x0.shape != (num_points, 9):
+            raise ValueError('x0 should have size num_pointsx9.')
         
         # Transform (x,y) to ((x-cx)/fx, (y-cy)/fy) before passing to EKF_IBVS_One_Point.
-        x0[0,:] = (x0[0,:] - cx) / fx
-        x0[1,:] = (x0[1,:] - cy) / fy
+        x0[:,0] = (x0[:,0] - cx) / fx
+        x0[:,1] = (x0[:,1] - cy) / fy
 
         # Create an EKF for each point feature.
         self.ekf_list = []
         for i in range(num_points):
-            self.ekf_list.append(EKF_IBVS_One_Point(dt, x0[:,i], P0, Q, R))
+            self.ekf_list.append(EKF_IBVS_One_Point(dt, x0[i,:], P0, Q, R))
 
     def predict(self, u):
         """Predict the state and covariance of each EKF.
@@ -145,28 +145,28 @@ class EKF_IBVS(object):
             z: measurement, size 3xnum_points
         """
         #Transform (x,y) to ((x-cx)/fx, (y-cy)/fy) before passing to EKF_IBVS_One_Point.
-        z[0,:] = (z[0,:] - self.cx) / self.fx
-        z[1,:] = (z[1,:] - self.cy) / self.fy
+        z[:,0] = (z[:,0] - self.cx) / self.fx
+        z[:,1] = (z[:,1] - self.cy) / self.fy
 
         for i, ekf in enumerate(self.ekf_list):
-            ekf.update(z[:,i])
+            ekf.update(z[i,:])
     
     def get_updated_state(self):
         """Get the state of all EKF.
         Returns:
-            x: state, size 9xnum_points
+            x: state, size num_pointsx9
         """
-        x = np.zeros((9, len(self.ekf_list)))
+        x = np.zeros((len(self.ekf_list),9))
         for i, ekf in enumerate(self.ekf_list):
-            x[:,i] = ekf.x
+            x[i,:] = ekf.x
         
         # Transform (x,y) to (x*fx+cx, y*fy+cy) before returning.
-        x[0,:] = x[0,:] * self.fx + self.cx
-        x[1,:] = x[1,:] * self.fy + self.cy
+        x[:,0] = x[:,0] * self.fx + self.cx
+        x[:,1] = x[:,1] * self.fy + self.cy
 
         # Transform (d1,d2,d3) to (d1*fx,d2*fy,d3) before returning.
-        x[3,:] = x[3,:] * self.fx
-        x[4,:] = x[4,:] * self.fy
+        x[:,3] = x[:,3] * self.fx
+        x[:,4] = x[:,4] * self.fy
 
         return x
     
@@ -183,19 +183,19 @@ class EKF_IBVS(object):
     def get_predicted_state(self):
         """Get the predicted state of all EKF.
         Returns:
-            x: state, size 9xnum_points
+            x: state, size num_pointsx9
         """
-        x = np.zeros((9, len(self.ekf_list)))
+        x = np.zeros((len(self.ekf_list),9))
         for i, ekf in enumerate(self.ekf_list):
-            x[:,i] = ekf.x_pre
+            x[i,:] = ekf.x_pre
         
         # Transform (x,y) to (x*fx+cx, y*fy+cy) before returning.
-        x[0,:] = x[0,:] * self.fx + self.cx
-        x[1,:] = x[1,:] * self.fy + self.cy
+        x[:,0] = x[:,0] * self.fx + self.cx
+        x[:,1] = x[:,1] * self.fy + self.cy
 
         # Transform (d1,d2,d3) to (d1*fx,d2*fy,d3) before returning.
-        x[3,:] = x[3,:] * self.fx
-        x[4,:] = x[4,:] * self.fy
+        x[:,3] = x[:,3] * self.fx
+        x[:,4] = x[:,4] * self.fy
 
         return x
     

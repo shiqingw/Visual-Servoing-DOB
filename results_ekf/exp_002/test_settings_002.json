@@ -11,7 +11,8 @@
     "visualize_target_traj_from_last": 0,
     "visualize_camera_traj_from_last": 0,
     "zero_vel": 0,
-    "horizon": 2200,
+    "horizon": 2400,
+    "wait_ekf": 200,
     "step_every": 8,
     "save_every": 24,
     "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
@@ -56,7 +57,7 @@
         "apriltag_radius": 0.11,
         "initial_position": [0.37, 0.0, 0.005],
         "center_position": [0.48, 0.0, 0.005],
-        "augular_velocity": 0.7,
+        "augular_velocity": 1,
         "offset_angle": 3.14
     },
 
@@ -66,22 +67,24 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 1
+        "obstacle_alpha": 0.1
     },
 
     "controller_config":{
+        "num_points": 4,
         "mean_gain": [1.0,1.0],
         "variance_gain": [1.0,1.0],
-        "variance_target": [4500, 4500],
+        "variance_target": [3000, 3000],
         "horizontal_gain": 1.0,
         "vertical_gain": 0.0,
         "manipulability_gain": 10,
-        "joint_limit_gain": 10
+        "joint_limit_gain": 1,
+        "fix_position_gain": 1
     },
 
     "observer_config":{
-        "active": 1,
-        "gain": [2.0,2.0],
+        "active": 0,
+        "gain": [10,10],
         "num_points": 4
     },
 
@@ -94,17 +97,18 @@
 
     "CBF_config":{
         "active": 1,
-        "cbf_value_record": 1,
+        "cbf_value_record": 0,
         "threshold_ub": 88,
         "threshold_lb": 46,
         "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
-        "compensation": 2.0
+        "compensation": 0.5
     },
 
     "ekf_config":{
-        "P": 1e-6,
-        "Q": 1e-6,
-        "R": 1e-3
+        "active": 1,
+        "P0": [1, 1, 1, 1e4, 1e4, 1e4, 1e2, 1e2, 1e2],
+        "Q": [1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e2, 1e2, 1e2],
+        "R": [1e-2, 1e-2, 1e-2]
     }
 }
