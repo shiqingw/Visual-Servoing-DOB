@@ -11,7 +11,7 @@
     "visualize_target_traj_from_last": 0,
     "visualize_camera_traj_from_last": 0,
     "zero_vel": 0,
-    "horizon": 2400,
+    "horizon": 1000,
     "wait_ekf": 200,
     "step_every": 8,
     "save_every": 24,

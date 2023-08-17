@@ -82,7 +82,7 @@
 
     "observer_config":{
         "active": 1,
-        "gain": [2,2],
+        "gain": [1.5,1.5],
         "num_points": 4
     },
 

@@ -57,7 +57,7 @@
         "apriltag_radius": 0.11,
         "initial_position": [0.37, 0.0, 0.005],
         "center_position": [0.48, 0.0, 0.005],
-        "augular_velocity": 1,
+        "augular_velocity": 2,
         "offset_angle": 3.14
     },
 
@@ -96,7 +96,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 0,
         "threshold_ub": 88,
         "threshold_lb": 46,

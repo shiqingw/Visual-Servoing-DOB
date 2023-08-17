@@ -8,15 +8,12 @@ import time
 import numpy as np
 import numpy.linalg as LA
 import pybullet as p
-from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 import proxsuite
-import cvxpy as cp
-from cvxpylayers.torch import CvxpyLayer
 import torch
 
 import sys
@@ -26,38 +23,9 @@ sys.path.append(str(Path(__file__).parent.parent))
 from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
-
-
-def axis_angle_from_rot_mat(rot_mat):
-    rotation = R.from_matrix(rot_mat)
-    axis_angle = rotation.as_rotvec()
-    angle = LA.norm(axis_angle)
-    axis = axis_angle / angle
-
-    return axis, angle
-
-def one_point_image_jacobian(coord_in_cam, fx, fy):
-    X = coord_in_cam[0]
-    Y = coord_in_cam[1]
-    Z = coord_in_cam[2]
-    J1 = np.array([-fx/Z, 0, fx*X/Z**2, fx*X*Y/Z**2, fx*(-1-X**2/Z**2), fx*Y/Z], dtype=np.float32)
-    J2 = np.array([0, -fy/Z, fy*Y/Z**2, fy*(1+Y**2/Z**2), -fy*X*Y/Z**2, -fy*X/Z], dtype=np.float32)
-
-    return np.vstack((J1, J2))
-
-def skew(x):
-    return np.array([[0, -x[2], x[1]],
-                     [x[2], 0, -x[0]],
-                     [-x[1], x[0], 0]], dtype=np.float32)
-
-def skew_to_vector(S):
-    return np.array([S[2,1], S[0,2], S[1,0]], dtype=np.float32)
-
-def point_in_image(x, y, width, height):
-    if (0 <= x and x < width):
-        if (0 <= y and y < height):
-            return True
-    return False
+from all_utils.vs_utils import one_point_image_jacobian, skew, skew_to_vector, point_in_image
+from all_utils.proxsuite_utils import init_prosuite_qp
+from all_utils.cvxpylayers_utils import init_cvxpylayer
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
@@ -187,44 +155,20 @@ def main():
     p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
-    # Differential optimization layer
+    # Differentiable optimization layer
     nv = 2
     nc_target = optimization_config["n_cons_target"]
     nc_obstacle = optimization_config["n_cons_obstacle"]
     kappa = optimization_config["exp_coef"]
+    cvxpylayer = init_cvxpylayer(nv, nc_target, nc_obstacle, kappa)
 
-    _p = cp.Variable(nv)
-    _alpha = cp.Variable(1)
+    # Proxsuite for CBF-QP
+    n, n_eq, n_in = 6, 0, 1
+    cbf_qp = init_prosuite_qp(n, n_eq, n_in)
 
-    _A_target = cp.Parameter((nc_target, nv))
-    _b_target = cp.Parameter(nc_target)
-    _A_obstacle = cp.Parameter((nc_obstacle, nv))
-    _b_obstacle = cp.Parameter(nc_obstacle)
-
-    obj = cp.Minimize(_alpha)
-    cons = [cp.sum(cp.exp(kappa*(_A_target @ _p - _b_target))) <= nc_target*_alpha, cp.sum(cp.exp(kappa*(_A_obstacle @ _p - _b_obstacle))) <= nc_obstacle*_alpha]
-    problem = cp.Problem(obj, cons)
-    assert problem.is_dpp()
-
-    cvxpylayer = CvxpyLayer(problem, parameters=[_A_target, _b_target, _A_obstacle, _b_obstacle], variables=[_alpha, _p], gp=False)
-
-    # CBF-QP
-    n = 6
-    n_eq = 0
-    n_in = 1
-    cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
-    cbf_qp.init(np.eye(6), None, None, None, None, None, None)
-    cbf_qp.settings.eps_abs = 1.0e-9
-    cbf_qp.solve()
-
-    # Joint limits QP
-    n = 9
-    n_eq = 0
-    n_in = 9
-    joint_limits_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
-    joint_limits_qp.init(np.eye(9), None, None, None, None, None, None)
-    joint_limits_qp.settings.eps_abs = 1.0e-9
-    joint_limits_qp.solve()
+    # Proxsuite for inverse kinematics with joint limits
+    n, n_eq, n_in = 9, 0, 9
+    joint_limits_qp = init_prosuite_qp(n, n_eq, n_in)
 
     # Adjust mean and variance target to 3 points
     num_points = 3

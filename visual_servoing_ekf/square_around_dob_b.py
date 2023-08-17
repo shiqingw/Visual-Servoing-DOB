@@ -8,6 +8,7 @@ import time
 import numpy as np
 import numpy.linalg as LA
 import pybullet as p
+from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
@@ -22,16 +23,17 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian, skew, skew_to_vector, point_in_image
 from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
+from ekf.ekf_ibvs import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -39,7 +41,7 @@ def main():
 
     args = parser.parse_args()
     exp_num = args.exp_num
-    results_dir = "{}/results_diff_opt_3_points/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
+    results_dir = "{}/results_ekf/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
     test_settings_path = "{}/test_settings/test_settings_{:03d}.json".format(str(Path(__file__).parent), exp_num)
     
     if not os.path.exists(results_dir):
@@ -60,6 +62,7 @@ def main():
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
     optimization_config = test_settings["optimization_config"]
+    ekf_config = test_settings["ekf_config"]
 
     # Joint limits
     joint_limits_config = test_settings["joint_limits_config"]
@@ -80,12 +83,15 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
+    robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
-    
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+ 
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
@@ -120,15 +126,17 @@ def main():
     observer_gain = np.diag(observer_config["gain"]*observer_config["num_points"])
 
     # Records
+    num_points = controller_config["num_points"]
     dt = 1.0/240
     T = test_settings["horizon"]
+    wait_ekf = test_settings["wait_ekf"]
     step_every = test_settings["step_every"]
     save_every = test_settings["save_every"]
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
     mean_errs = np.zeros((num_data,2), dtype = np.float32)
-    orientation_errs = np.zeros((num_data,2), dtype = np.float32)
-    observer_errs = np.zeros(num_data, dtype = np.float32)
+    position_errs = np.zeros((num_data,2*num_points), dtype = np.float32)
+    dist_observer = np.zeros((num_data,8), dtype = np.float32)
     manipulability = np.zeros(num_data, dtype = np.float32)
     vels = np.zeros((num_data,9), dtype = np.float32)
     joint_values = np.zeros((num_data,9), dtype = np.float32)
@@ -136,6 +144,10 @@ def main():
     cbf_value = np.zeros(num_data, dtype = np.float32)
     target_center = np.zeros((num_data,3), dtype = np.float32)
     camera_position = np.zeros((num_data,3), dtype = np.float32)
+    ekf_estimates = np.zeros((num_data,4,9), dtype = np.float32)
+    d_true_values = np.zeros((num_data,8), dtype = np.float32)
+    corners_values = np.zeros((num_data,4,2), dtype = np.float32)
+    depth_values = np.zeros((num_data,4), dtype = np.float32)
 
     # Obstacle line
     obstacle_config = test_settings["obstacle_config"]
@@ -146,8 +158,8 @@ def main():
     #                    lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
@@ -169,8 +181,7 @@ def main():
     n, n_eq, n_in = 9, 0, 9
     joint_limits_qp = init_prosuite_qp(n, n_eq, n_in)
 
-    # Adjust mean and variance target to 3 points
-    num_points = 3
+    # Adjust mean and variance target to num_points
     x0 = intrinsic_matrix[0, 2]
     y0 = intrinsic_matrix[1, 2]
     old_mean_target = np.array([x0,y0], dtype=np.float32)
@@ -182,6 +193,11 @@ def main():
     desired_coords = desired_coords*np.sqrt(old_variance_target) + old_mean_target
     mean_target = np.mean(desired_coords[0:num_points,:], axis=0)
     variance_target = np.var(desired_coords[0:num_points,:], axis = 0)
+
+    # Initial condition for the EKF
+    P0 = np.diag(ekf_config["P0"])
+    Q = np.diag(ekf_config["Q"])
+    R = np.diag(ekf_config["R"])
 
     # Display trajs from last
     if test_settings["visualize_target_traj_from_last"] == 1:
@@ -196,13 +212,12 @@ def main():
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
-        apriltag_angle = augular_velocity*i*dt + apriltag_config["offset_angle"]
+        apriltag_angle = augular_velocity*max(0,i-wait_ekf)*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
+        april_tag_quat = p.getQuaternionFromEuler([np.pi/2, 0, np.pi/2 + 0*dt*max(0,i-wait_ekf)])
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
-        apriltag_speed_in_world = (apriltag_position - last_apriltag_position)/dt
-        last_apriltag_position = apriltag_position
- 
+
         if i % step_every == 0:
             info = env.get_image()
             rgb_opengl = info["rgb"]
@@ -221,15 +236,15 @@ def main():
             for ii in range(len(corners)):
                 x, y = corners[ii,:]
                 if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
-
             if np.sum(if_in) != len(corners):
                 break
-
+            
             # Use cv2 window to display image
             if enable_gui_camera_data == 0:
                 cv2.namedWindow("RGB")
                 BGR = cv2.cvtColor(rgb_opengl, cv2.COLOR_RGB2BGR)
                 cv2.imshow("RGB", BGR)
+
             # Initialize the observer such that d_hat = 0 at t = 0
             if i == 0:
                 epsilon = observer_gain @ np.reshape(corners, (2*len(corners),))
@@ -238,12 +253,19 @@ def main():
             near = camera_config["near"]
             far = camera_config["far"]
             depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
-
+            
             corner_depths = np.zeros([corners.shape[0],1], dtype=np.float32)
             for ii in range(len(corners)):
                 x, y = corners[ii,:]
                 corner_depths[ii] = depth_opengl[int(y), int(x)]
 
+            # Initialize the EKF
+            if i == 0:
+                ekf_init_val = np.zeros((len(corners), 9), dtype=np.float32)
+                ekf_init_val[:,0:2] = corners[0:len(corners),:]
+                ekf_init_val[:,2] = corner_depths[0:len(corners),0]
+                ekf = EKF_IBVS(num_points, ekf_init_val, P0, Q, R, fx, fy, x0, y0)
+            
             pixel_coord = np.hstack((corners, np.ones((corners.shape[0],1), dtype=np.float32)))
             pixel_coord_denomalized = pixel_coord*corner_depths
             
@@ -254,6 +276,8 @@ def main():
             H = np.vstack((_H, np.array([[0.0, 0.0, 0.0, 1.0]])))
 
             coord_in_world = coord_in_cam @ H.T
+            if i == 0:
+                last_coord_in_world = coord_in_world
 
             # Record
             target_center[i//step_every,:] = np.mean(coord_in_world[:,0:3], axis=0)
@@ -267,7 +291,7 @@ def main():
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw obstacle vertices in world
+            # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -293,27 +317,21 @@ def main():
             error_variance = np.var(corners[0:num_points,:], axis = 0) - variance_target
             xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
 
-            # Compute desired pixel velocity (orientation)
-            orientation_gain = np.diag([controller_config["horizontal_gain"], controller_config["vertical_gain"]])
-            J_orientation = np.zeros((2, 2*len(corners)), dtype=np.float32)
-            tmp1 = np.arange(0,len(corners),2,dtype=np.int_)
-            tmp2 = np.arange(1,len(corners),2,dtype=np.int_)
-            tmp = np.zeros(len(corners), dtype=np.int_)
-            tmp[0::2] = tmp2
-            tmp[1::2] = tmp1
-            J_orientation[0,1::2] += corners[:,1] - corners[tmp,1]
-            J_orientation[1,0::2] += corners[:,0] - np.flip(corners[:,0])
-            J_orientation = 2*J_orientation
-            J_orientation = J_orientation[:,0:2*num_points]
-            J_orientation[1,0] = 0
-            J_orientation[0,5] = 0
-            error_orientation = np.sum(J_orientation**2, axis=1)/8.0
-            xd_yd_orientation = - LA.pinv(J_orientation) @ orientation_gain @ error_orientation
+            # Compute desired pixel velocity (position)
+            fix_position_gain = controller_config["fix_position_gain"]
+            error_position = corners.reshape(-1) - desired_coords.reshape(-1)
+            error_position = error_position[0:2*num_points]
+            J_position = np.eye(2*num_points, dtype=np.float32)
+            xd_yd_position = - fix_position_gain * LA.pinv(J_position) @ error_position
 
             # Speed contribution due to movement of the apriltag
-            apriltag_speed_in_cam = info["R_CAMERA"] @ apriltag_speed_in_world
-            d_true = -J_image_cam[:,0:3] @ apriltag_speed_in_cam
-
+            d_true = np.zeros(2*len(corners), dtype=np.float32)
+            for ii in range(len(corners)):
+                speed_of_corner_in_world = (coord_in_world[ii,0:3] - last_coord_in_world[ii,0:3])/(dt*step_every)
+                speed_of_corner_in_cam = info["R_CAMERA"].T @ speed_of_corner_in_world.squeeze()
+                d_true[2*ii:2*ii+2] = -J_image_cam[2*ii:2*ii+2,0:3] @ speed_of_corner_in_cam
+            last_coord_in_world = coord_in_world
+            
             # Update the observer
             d_hat = observer_gain @ np.reshape(corners, (2*len(corners),)) - epsilon
 
@@ -321,12 +339,33 @@ def main():
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
             null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
             null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_orientation
+            null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
+            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
+            # xd_yd = xd_yd_position + null_position @ xd_yd_mean
+            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
+            xd_yd = xd_yd_position
             J_active = J_image_cam[0:2*num_points]
+
+            mesurements = np.hstack((corners, corner_depths))
+            ekf.update(mesurements)
+
             if observer_config["active"] == 1:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+            elif ekf_config["active"] == 1:
+                ekf_updated_states = ekf.get_updated_state()
+                d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
             else:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+
+            # if observer_config["active"] == 1:
+            #     speeds_in_cam_desired =  LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
+            # elif ekf_config["active"] == 1:
+            #     ekf_updated_states = ekf.get_updated_state()
+            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
+            #     speeds_in_cam_desired =  LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
+            # else:
+            #     speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -390,7 +429,6 @@ def main():
                     cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
-
                 else: 
                     speeds_in_cam = speeds_in_cam_desired
                     print("CBF skipped")
@@ -485,7 +523,7 @@ def main():
                 rgbim = Image.fromarray(rgb_opengl)
                 rgbim_no_alpha = rgbim.convert('RGB')
                 rgbim_no_alpha.save(results_dir+'/rgb_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]))
-                
+
             if test_settings["save_depth"] == 1 and i % save_every == 0:
                 plt.imsave(results_dir+'/depth_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), depth_opengl)
 
@@ -497,8 +535,11 @@ def main():
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
+                x, y = p_sol.detach().numpy()
+                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-            
+                
             if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
@@ -517,13 +558,14 @@ def main():
                             x, y = pp
                             img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
                 cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
-
+                
             # Step the simulation
-            if test_settings["zero_vel"] == 1:
+            if test_settings["zero_vel"] == 1 or i< wait_ekf:
                 vel = np.zeros_like(vel)
+            # vel = np.clip(vel,-0.4,0.4)
             info = env.step(vel, return_image=False)
 
-            # Step the observer
+            # Step the observers
             dq_executed = vel
             speeds_in_world = J_camera @ dq_executed
             v_in_world = speeds_in_world[0:3]
@@ -534,14 +576,19 @@ def main():
             omega_in_cam = skew_to_vector(S_in_cam)
             speeds_in_cam = np.hstack((v_in_cam, omega_in_cam))
             epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
+            ekf.predict(dt*step_every, speeds_in_cam)
 
             # Records
             mean_errs[i//step_every,:] = error_mean
-            orientation_errs[i//step_every,:] = error_orientation
-            observer_errs[i//step_every] = LA.norm(d_hat - d_true)
+            position_errs[i//step_every,:] = error_position
+            dist_observer[i//step_every] = d_hat
             manipulability[i//step_every] = np.sqrt(LA.det(J_camera @ J_camera.T))
             vels[i//step_every] = vel
             joint_values[i//step_every] = q
+            d_true_values[i//step_every] = d_true
+            ekf_estimates[i//step_every] = ekf.get_updated_state()
+            corners_values[i//step_every] = corners
+            depth_values[i//step_every] = corner_depths.squeeze()
 
         else:
             info = env.step(vel)
@@ -555,8 +602,8 @@ def main():
 
     summary = {'times': times,
             'mean_errs': mean_errs,
-            'orientation_errs': orientation_errs,
-            'observer_errs': observer_errs,
+            'position_errs': position_errs,
+            'dist_observer': dist_observer,
             'manipulability': manipulability,
             'joint_vels': vels,
             'joint_values': joint_values,
@@ -564,7 +611,11 @@ def main():
             'cbf_value': cbf_value,
             'stop_ind': i//step_every,
             'target_center': target_center,
-            'camera_position': camera_position}
+            'camera_position': camera_position,
+            'd_true_values': d_true_values,
+            'ekf_estimates': ekf_estimates,
+            'corners_values': corners_values,
+            'depth_values': depth_values}
     print("==> Saving summary ...")
     save_dict(summary, os.path.join(results_dir, "summary.npy"))
     
@@ -578,18 +629,21 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, orientation_errs[:,0], label="x")
-    plt.plot(times, orientation_errs[:,1], label="y")
+    plt.plot(times, mean_errs[:,0], label="x")
+    plt.plot(times, mean_errs[:,1], label="y")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'plot_orientation_errs.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_mean_errs.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, observer_errs, label="observer_errs")
+    plt.plot(times, np.sqrt(position_errs[:,0]**2 + position_errs[:,1]**2), label="1")
+    plt.plot(times, np.sqrt(position_errs[:,2]**2 + position_errs[:,3]**2), label="2")
+    plt.plot(times, np.sqrt(position_errs[:,4]**2 + position_errs[:,5]**2), label="3")
+    plt.plot(times, np.sqrt(position_errs[:,6]**2 + position_errs[:,6]**2), label="4")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'plot_observer_errs.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_position_errs.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
@@ -620,14 +674,69 @@ def main():
     plt.savefig(os.path.join(results_dir, 'plot_joint_vel.png'))
     plt.close(fig)
 
+    fig, axs = plt.subplots(2, 5, figsize=(20, 8))
     for i in range(joint_values.shape[1]):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+        plt.subplot(2, 5, i+1)
         plt.plot(times, joint_values[:,i], label="{}".format(i))
-        plt.legend()
         plt.axhline(y = joint_ub[i], color = 'black', linestyle = 'dotted')
         plt.axhline(y = joint_lb[i], color = 'black', linestyle = 'dotted')
-        plt.savefig(os.path.join(results_dir, 'plot_joint_value_{}.png'.format(i)))
-        plt.close(fig)
+        plt.title("joint_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_q.png'))
+    plt.close(fig)
+
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    for i in range(4):
+        plt.subplot(2, 4, i+1)
+        plt.plot(times, dist_observer[:,2*i], label="dob_x")
+        plt.plot(times, d_true_values[:,2*i], label="true_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
+        plt.plot(times, dist_observer[:,2*i+1], label="dob_y")
+        plt.plot(times, d_true_values[:,2*i+1], label="true_y")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_dob_d_hat.png'))
+    plt.close(fig)
+    
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    for i in range(4):
+        plt.subplot(2, 4, i+1)
+        plt.plot(times, ekf_estimates[:,i,3], label="ekf_x")
+        plt.plot(times, d_true_values[:,2*i], label="true_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
+        plt.plot(times, ekf_estimates[:,i,4], label="ekf_y")
+        plt.plot(times, d_true_values[:,2*i+1], label="true_y")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_d_hat.png'))
+    plt.close(fig)
+
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    for i in range(4):
+        plt.subplot(2, 4, i+1)
+        plt.plot(times, ekf_estimates[:,i,0], label="ekf_x")
+        plt.plot(times, corners_values[:,i,0], label="true_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
+        plt.plot(times, ekf_estimates[:,i,1], label="ekf_y")
+        plt.plot(times, corners_values[:,i,1], label="true_y")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_corners.png'))
+
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    for i in range(4):
+        plt.subplot(2, 2, i+1)
+        plt.plot(times, ekf_estimates[:,i,2], label="ekf")
+        plt.plot(times, depth_values[:,i], label="true")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_depths.png'))
+
 
 if __name__ == "__main__":
     main()

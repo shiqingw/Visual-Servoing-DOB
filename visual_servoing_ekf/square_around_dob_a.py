@@ -26,44 +26,14 @@ sys.path.append(str(Path(__file__).parent.parent))
 from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
-
+from all_utils.vs_utils import one_point_image_jacobian, skew, skew_to_vector, point_in_image
+from all_utils.proxsuite_utils import init_prosuite_qp
+from all_utils.cvxpylayers_utils import init_cvxpylayer
 from ekf.ekf_ibvs import EKF_IBVS
-
-
-def axis_angle_from_rot_mat(rot_mat):
-    rotation = R.from_matrix(rot_mat)
-    axis_angle = rotation.as_rotvec()
-    angle = LA.norm(axis_angle)
-    axis = axis_angle / angle
-
-    return axis, angle
-
-def one_point_image_jacobian(coord_in_cam, fx, fy):
-    X = coord_in_cam[0]
-    Y = coord_in_cam[1]
-    Z = coord_in_cam[2]
-    J1 = np.array([-fx/Z, 0, fx*X/Z**2, fx*X*Y/Z**2, fx*(-1-X**2/Z**2), fx*Y/Z], dtype=np.float32)
-    J2 = np.array([0, -fy/Z, fy*Y/Z**2, fy*(1+Y**2/Z**2), -fy*X*Y/Z**2, -fy*X/Z], dtype=np.float32)
-
-    return np.vstack((J1, J2))
-
-def skew(x):
-    return np.array([[0, -x[2], x[1]],
-                     [x[2], 0, -x[0]],
-                     [-x[1], x[0], 0]], dtype=np.float32)
-
-def skew_to_vector(S):
-    return np.array([S[2,1], S[0,2], S[1,0]], dtype=np.float32)
-
-def point_in_image(x, y, width, height):
-    if (0 <= x and x < width):
-        if (0 <= y and y < height):
-            return True
-    return False
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -196,44 +166,20 @@ def main():
     p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
-    # Differential optimization layer
+    # Differentiable optimization layer
     nv = 2
     nc_target = optimization_config["n_cons_target"]
     nc_obstacle = optimization_config["n_cons_obstacle"]
     kappa = optimization_config["exp_coef"]
+    cvxpylayer = init_cvxpylayer(nv, nc_target, nc_obstacle, kappa)
 
-    _p = cp.Variable(nv)
-    _alpha = cp.Variable(1)
+    # Proxsuite for CBF-QP
+    n, n_eq, n_in = 6, 0, 1
+    cbf_qp = init_prosuite_qp(n, n_eq, n_in)
 
-    _A_target = cp.Parameter((nc_target, nv))
-    _b_target = cp.Parameter(nc_target)
-    _A_obstacle = cp.Parameter((nc_obstacle, nv))
-    _b_obstacle = cp.Parameter(nc_obstacle)
-
-    obj = cp.Minimize(_alpha)
-    cons = [cp.sum(cp.exp(kappa*(_A_target @ _p - _b_target))) <= nc_target*_alpha, cp.sum(cp.exp(kappa*(_A_obstacle @ _p - _b_obstacle))) <= nc_obstacle*_alpha]
-    problem = cp.Problem(obj, cons)
-    assert problem.is_dpp()
-
-    cvxpylayer = CvxpyLayer(problem, parameters=[_A_target, _b_target, _A_obstacle, _b_obstacle], variables=[_alpha, _p], gp=False)
-
-    # CBF-QP
-    n = 6
-    n_eq = 0
-    n_in = 1
-    cbf_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
-    cbf_qp.init(np.eye(6), None, None, None, None, None, None)
-    cbf_qp.settings.eps_abs = 1.0e-9
-    cbf_qp.solve()
-
-    # Joint limits QP
-    n = 9
-    n_eq = 0
-    n_in = 9
-    joint_limits_qp = proxsuite.proxqp.dense.QP(n, n_eq, n_in)
-    joint_limits_qp.init(np.eye(9), None, None, None, None, None, None)
-    joint_limits_qp.settings.eps_abs = 1.0e-9
-    joint_limits_qp.solve()
+    # Proxsuite for inverse kinematics with joint limits
+    n, n_eq, n_in = 9, 0, 9
+    joint_limits_qp = init_prosuite_qp(n, n_eq, n_in)
 
     # Adjust mean and variance target to num_points
     x0 = intrinsic_matrix[0, 2]
@@ -378,6 +324,7 @@ def main():
             J_position = np.zeros((num_points, 2*num_points), dtype=np.float32)
             for ii in range(num_points):
                 J_position[ii, 2*ii:2*ii+2] = tmp[ii,:]
+            J_position = 2*J_position
             xd_yd_position = - fix_position_gain * LA.pinv(J_position) @ error_position
 
             # Speed contribution due to movement of the apriltag
@@ -405,14 +352,23 @@ def main():
             mesurements = np.hstack((corners, corner_depths))
             ekf.update(mesurements)
             
+            # if observer_config["active"] == 1:
+            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+            # elif ekf_config["active"] == 1:
+            #     ekf_updated_states = ekf.get_updated_state()
+            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
+            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
+            # else:
+            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
+                speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
             elif ekf_config["active"] == 1:
                 ekf_updated_states = ekf.get_updated_state()
                 d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
+                speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
             else:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+                speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -684,10 +640,10 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, position_errs[:,0], label="1")
-    plt.plot(times, position_errs[:,1], label="2")
-    plt.plot(times, position_errs[:,2], label="3")
-    plt.plot(times, position_errs[:,3], label="4")
+    plt.plot(times, np.sqrt(position_errs[:,0]), label="1")
+    plt.plot(times, np.sqrt(position_errs[:,1]), label="2")
+    plt.plot(times, np.sqrt(position_errs[:,2]), label="3")
+    plt.plot(times, np.sqrt(position_errs[:,3]), label="4")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
     plt.savefig(os.path.join(results_dir, 'plot_position_errs.png'))
@@ -721,52 +677,68 @@ def main():
     plt.savefig(os.path.join(results_dir, 'plot_joint_vel.png'))
     plt.close(fig)
 
+    fig, axs = plt.subplots(2, 5, figsize=(20, 8))
     for i in range(joint_values.shape[1]):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+        plt.subplot(2, 5, i+1)
         plt.plot(times, joint_values[:,i], label="{}".format(i))
-        plt.legend()
         plt.axhline(y = joint_ub[i], color = 'black', linestyle = 'dotted')
         plt.axhline(y = joint_lb[i], color = 'black', linestyle = 'dotted')
-        plt.savefig(os.path.join(results_dir, 'plot_joint_value_{}.png'.format(i)))
-        plt.close(fig)
-    
+        plt.title("joint_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_q.png'))
+    plt.close(fig)
+
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
     for i in range(4):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-        plt.plot(times, d_true_values[:,2*i], label="true_x")
+        plt.subplot(2, 4, i+1)
         plt.plot(times, dist_observer[:,2*i], label="dob_x")
-        plt.plot(times, d_true_values[:,2*i+1], label="true_y")
-        plt.plot(times, dist_observer[:,2*i+1], label="dob_y")
-        plt.legend()
-        plt.savefig(os.path.join(results_dir, 'plot_dob_d_hat_point_{}.png'.format(i)))
-        plt.close(fig)
-    
-    for i in range(4):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
         plt.plot(times, d_true_values[:,2*i], label="true_x")
-        plt.plot(times, ekf_estimates[:,i,3], label="ekf_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
+        plt.plot(times, dist_observer[:,2*i+1], label="dob_y")
         plt.plot(times, d_true_values[:,2*i+1], label="true_y")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_dob_d_hat.png'))
+    plt.close(fig)
+    
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    for i in range(4):
+        plt.subplot(2, 4, i+1)
+        plt.plot(times, ekf_estimates[:,i,3], label="ekf_x")
+        plt.plot(times, d_true_values[:,2*i], label="true_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
         plt.plot(times, ekf_estimates[:,i,4], label="ekf_y")
+        plt.plot(times, d_true_values[:,2*i+1], label="true_y")
         plt.legend()
-        plt.savefig(os.path.join(results_dir, 'plot_ekf_d_hat_point_{}.png'.format(i)))
-        plt.close(fig)
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_d_hat.png'))
+    plt.close(fig)
 
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
     for i in range(4):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-        plt.plot(times, corners_values[:,i,0], label="true_x")
+        plt.subplot(2, 4, i+1)
         plt.plot(times, ekf_estimates[:,i,0], label="ekf_x")
-        plt.plot(times, corners_values[:,i,1], label="true_y")
+        plt.plot(times, corners_values[:,i,0], label="true_x")
+        plt.legend()
+        plt.title("point_{}".format(i+1))
+        plt.subplot(2, 4, i+5)
         plt.plot(times, ekf_estimates[:,i,1], label="ekf_y")
+        plt.plot(times, corners_values[:,i,1], label="true_y")
         plt.legend()
-        plt.savefig(os.path.join(results_dir, 'plot_ekf_corners_point_{}.png'.format(i)))
-        plt.close(fig)
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_corners.png'))
 
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
     for i in range(4):
-        fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-        plt.plot(times, depth_values[:,i], label="true")
+        plt.subplot(2, 2, i+1)
         plt.plot(times, ekf_estimates[:,i,2], label="ekf")
+        plt.plot(times, depth_values[:,i], label="true")
         plt.legend()
-        plt.savefig(os.path.join(results_dir, 'plot_ekf_depths_point_{}.png'.format(i)))
-        plt.close(fig)
+        plt.title("point_{}".format(i+1))
+    plt.savefig(os.path.join(results_dir, 'plot_ekf_depths.png'))
 
 
 if __name__ == "__main__":
