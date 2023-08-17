@@ -318,7 +318,7 @@ def main():
                 ekf_init_val = np.zeros((len(corners), 9), dtype=np.float32)
                 ekf_init_val[:,0:2] = corners[0:len(corners),:]
                 ekf_init_val[:,2] = corner_depths[0:len(corners),0]
-                ekf = EKF_IBVS(dt*step_every, num_points, ekf_init_val, P0, Q, R, fx, fy, x0, y0)
+                ekf = EKF_IBVS(num_points, ekf_init_val, P0, Q, R, fx, fy, x0, y0)
             
             pixel_coord = np.hstack((corners, np.ones((corners.shape[0],1), dtype=np.float32)))
             pixel_coord_denomalized = pixel_coord*corner_depths
@@ -623,7 +623,7 @@ def main():
             omega_in_cam = skew_to_vector(S_in_cam)
             speeds_in_cam = np.hstack((v_in_cam, omega_in_cam))
             epsilon += step_every * dt * observer_gain @ (J_image_cam @speeds_in_cam + d_hat)
-            ekf.predict(speeds_in_cam)
+            ekf.predict(dt*step_every, speeds_in_cam)
 
             # Records
             mean_errs[i//step_every,:] = error_mean

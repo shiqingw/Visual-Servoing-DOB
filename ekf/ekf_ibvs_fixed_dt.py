@@ -11,16 +11,19 @@ class EKF_IBVS_One_Point(object):
         Implemented based on Eq 12 in Towards Dynamic Visual Servoing for Interaction
         Control and Moving Targets, ICRA 2022.
     """
-    def __init__(self, x0, P0, Q, R):   
+    def __init__(self, dt, x0, P0, Q, R):   
         """Initialize EKF for IBVS.
 
         Args:
+            dt (float): sampling time
             x0 (np.array): initial state, size 9
             P0 (np.array): initial covariance, size 9x9
             Q (np.array): process noise covariance, size 9x9
             R (np.array): measurement noise covariance, size 3x3
         
         """
+
+        self.dt = dt
         self.x = x0
         self.P = P0
         self.Q = Q
@@ -30,7 +33,7 @@ class EKF_IBVS_One_Point(object):
 
         # Define symbolic variables
         x, y, Z, d1, d2, d3, dd1, dd2, dd3 = symbols('x y Z d1 d2 d3 dd1 dd2 dd3')
-        dt, Vx, Vy, Vz, Wx, Wy, Wz = symbols('dt Vx Vy Vz Wx Wy Wz')
+        Vx, Vy, Vz, Wx, Wy, Wz = symbols('Vx Vy Vz Wx Wy Wz')
 
         # Define continuous dynamics
         dot_x_y_Z = Matrix([[-1/Z, 0, x/Z, x*y, -(1+x**2), y],
@@ -42,32 +45,31 @@ class EKF_IBVS_One_Point(object):
 
         # Define discrete dynamics
         discrete_dynamics = continuous_dynamics * dt + Matrix([[x], [y], [Z], [d1], [d2], [d3], [dd1], [dd2], [dd3]])
-        self.discrete_dynamics = lambdify([dt, x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_dynamics, "numpy")
+        self.discrete_dynamics = lambdify([x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_dynamics, "numpy")
 
         # Define process partial derivatives
         discrete_process_jacobian = simplify(discrete_dynamics.jacobian(Matrix([x, y, Z, d1, d2, d3, dd1, dd2, dd3])))
-        self.discrete_process_jacobian = lambdify([dt, x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_process_jacobian, "numpy")
+        self.discrete_process_jacobian = lambdify([x, y, Z, d1, d2, d3, dd1, dd2, dd3, Vx, Vy, Vz, Wx, Wy, Wz], discrete_process_jacobian, "numpy")
 
         # Define measurement partial derivatives
         self.measurement_jacobian = np.eye(3,9)
 
-    def predict(self, dt, u):
+    def predict(self, u):
         """
         Step the EKF without updating with measurements. 
         u = [Vx Vy Vz Wx Wy Wz] is the control input, all expressed in the camera frame.
         Args:   
-            dt: time interval between two frames, float
             u (np.array): control input, size 6
         """
         # Update state
         if u.ndim > 1:
             u = np.squeeze(u)
 
-        self.x_pre = np.squeeze(self.discrete_dynamics(dt, *self.x_pre, *u))
+        self.x_pre = np.squeeze(self.discrete_dynamics(*self.x_pre, *u))
 
         # Update covariance
-        A = self.discrete_process_jacobian(dt, *self.x_pre, *u)
-        self.P_pre = A @ self.P_pre @ A.T + self.Q * dt
+        A = self.discrete_process_jacobian(*self.x_pre, *u)
+        self.P_pre = A @ self.P_pre @ A.T + self.Q * self.dt
     
     def update(self, z):
         """
@@ -96,9 +98,10 @@ class EKF_IBVS_One_Point(object):
 class EKF_IBVS(object):
     """EKF for IBVS with image points features. This is a collection many EKF_IBVS_One_Point.
     """
-    def __init__(self, num_points, x0, P0, Q, R, fx, fy, cx, cy):   
+    def __init__(self, dt, num_points, x0, P0, Q, R, fx, fy, cx, cy):   
         """
         Args:
+            dt: time interval between two frames
             num_points: number of points features
             x0: initial state, size num_pointsx9
             P0: initial covariance, size 9x9
@@ -126,15 +129,15 @@ class EKF_IBVS(object):
         # Create an EKF for each point feature.
         self.ekf_list = []
         for i in range(num_points):
-            self.ekf_list.append(EKF_IBVS_One_Point(x0[i,:], P0, Q, R))
+            self.ekf_list.append(EKF_IBVS_One_Point(dt, x0[i,:], P0, Q, R))
 
-    def predict(self, dt, u):
+    def predict(self, u):
         """Predict the state and covariance of each EKF.
         Args:
             u: control input, size 6x1
         """
         for ekf in self.ekf_list:
-            ekf.predict(dt, u)
+            ekf.predict(u)
 
     def update(self, z):
         """Update the state and covariance of each EKF.
