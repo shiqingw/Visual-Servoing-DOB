@@ -340,9 +340,9 @@ def main():
 
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
-            null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
+            # null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
+            # null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
+            # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             # xd_yd = xd_yd_position + null_position @ xd_yd_mean
             # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
@@ -352,23 +352,23 @@ def main():
             mesurements = np.hstack((corners, corner_depths))
             ekf.update(mesurements)
             
-            # if observer_config["active"] == 1:
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
-            # elif ekf_config["active"] == 1:
-            #     ekf_updated_states = ekf.get_updated_state()
-            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
-            # else:
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
-
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
             elif ekf_config["active"] == 1:
                 ekf_updated_states = ekf.get_updated_state()
                 d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
-                speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
             else:
-                speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
+
+            # if observer_config["active"] == 1:
+            #     speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
+            # elif ekf_config["active"] == 1:
+            #     ekf_updated_states = ekf.get_updated_state()
+            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
+            #     speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
+            # else:
+            #     speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
