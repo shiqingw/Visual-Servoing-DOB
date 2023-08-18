@@ -8,22 +8,19 @@ import time
 import numpy as np
 import numpy.linalg as LA
 import pybullet as p
-from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 import proxsuite
-import cvxpy as cp
-from cvxpylayers.torch import CvxpyLayer
 import torch
 
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
+from fr3_envs.fr3_env_with_cam_obs import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian, skew, skew_to_vector, point_in_image
@@ -83,14 +80,11 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
-    robot_base_p_offset = simulator_config["robot_base_p_offset"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
@@ -340,13 +334,14 @@ def main():
 
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
-            # null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
+            null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
+            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             # xd_yd = xd_yd_position + null_position @ xd_yd_mean
-            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
-            xd_yd = xd_yd_position
+            xd_yd = xd_yd_mean + null_mean @ xd_yd_position
+            # xd_yd = xd_yd_position
+            # xd_yd = xd_yd_mean 
             J_active = J_image_cam[0:2*num_points]
 
             mesurements = np.hstack((corners, corner_depths))
@@ -360,15 +355,6 @@ def main():
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
             else:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
-
-            # if observer_config["active"] == 1:
-            #     speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
-            # elif ekf_config["active"] == 1:
-            #     ekf_updated_states = ekf.get_updated_state()
-            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
-            #     speeds_in_cam_desired = LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
-            # else:
-            #     speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -395,6 +381,7 @@ def main():
                 b_obstacle_np = b_obstacle_val.detach().numpy()
                 tmp = kappa*(corners @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
+                print(tmp)
      
                 if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()

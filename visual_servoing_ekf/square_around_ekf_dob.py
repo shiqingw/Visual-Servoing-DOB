@@ -8,15 +8,12 @@ import time
 import numpy as np
 import numpy.linalg as LA
 import pybullet as p
-from scipy.spatial.transform import Rotation as R
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 import proxsuite
-import cvxpy as cp
-from cvxpylayers.torch import CvxpyLayer
 import torch
 
 import sys
@@ -135,7 +132,7 @@ def main():
     num_data = (T-1)//step_every + 1
     times = np.arange(0, num_data)*step_every*dt
     mean_errs = np.zeros((num_data,2), dtype = np.float32)
-    position_errs = np.zeros((num_data,2*num_points), dtype = np.float32)
+    position_errs = np.zeros((num_data,num_points), dtype = np.float32)
     dist_observer = np.zeros((num_data,8), dtype = np.float32)
     manipulability = np.zeros(num_data, dtype = np.float32)
     vels = np.zeros((num_data,9), dtype = np.float32)
@@ -319,9 +316,12 @@ def main():
 
             # Compute desired pixel velocity (position)
             fix_position_gain = controller_config["fix_position_gain"]
-            error_position = corners.reshape(-1) - desired_coords.reshape(-1)
-            error_position = error_position[0:2*num_points]
-            J_position = np.eye(2*num_points, dtype=np.float32)
+            tmp = corners - desired_coords
+            error_position = np.sum(tmp**2, axis=1)[0:num_points]
+            J_position = np.zeros((num_points, 2*num_points), dtype=np.float32)
+            for ii in range(num_points):
+                J_position[ii, 2*ii:2*ii+2] = tmp[ii,:]
+            J_position = 2*J_position
             xd_yd_position = - fix_position_gain * LA.pinv(J_position) @ error_position
 
             # Speed contribution due to movement of the apriltag
@@ -338,17 +338,17 @@ def main():
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
             null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
-            null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
+            # null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
+            # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             # xd_yd = xd_yd_position + null_position @ xd_yd_mean
-            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
-            xd_yd = xd_yd_position
+            xd_yd = xd_yd_mean + null_mean @ xd_yd_position
+            # xd_yd = xd_yd_position
             J_active = J_image_cam[0:2*num_points]
 
             mesurements = np.hstack((corners, corner_depths))
             ekf.update(mesurements)
-
+            
             if observer_config["active"] == 1:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat[0:2*num_points])
             elif ekf_config["active"] == 1:
@@ -357,15 +357,6 @@ def main():
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf)
             else:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 1*np.eye(2*num_points)) @ xd_yd
-
-            # if observer_config["active"] == 1:
-            #     speeds_in_cam_desired =  LA.pinv(J_active) @ (xd_yd - d_hat[0:2*num_points])
-            # elif ekf_config["active"] == 1:
-            #     ekf_updated_states = ekf.get_updated_state()
-            #     d_hat_ekf = ekf_updated_states[0:num_points,3:5].reshape(-1)
-            #     speeds_in_cam_desired =  LA.pinv(J_active) @ (xd_yd - d_hat_ekf)
-            # else:
-            #     speeds_in_cam_desired = LA.pinv(J_active) @ xd_yd
 
             # Map obstacle vertices to image
             obstacle_corner_in_cam = obstacle_corner_in_world @ LA.inv(H).T 
@@ -637,10 +628,10 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, np.sqrt(position_errs[:,0]**2 + position_errs[:,1]**2), label="1")
-    plt.plot(times, np.sqrt(position_errs[:,2]**2 + position_errs[:,3]**2), label="2")
-    plt.plot(times, np.sqrt(position_errs[:,4]**2 + position_errs[:,5]**2), label="3")
-    plt.plot(times, np.sqrt(position_errs[:,6]**2 + position_errs[:,6]**2), label="4")
+    plt.plot(times, np.sqrt(position_errs[:,0]), label="1")
+    plt.plot(times, np.sqrt(position_errs[:,1]), label="2")
+    plt.plot(times, np.sqrt(position_errs[:,2]), label="3")
+    plt.plot(times, np.sqrt(position_errs[:,3]), label="4")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
     plt.savefig(os.path.join(results_dir, 'plot_position_errs.png'))

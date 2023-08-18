@@ -11,8 +11,8 @@
     "visualize_target_traj_from_last": 0,
     "visualize_camera_traj_from_last": 0,
     "zero_vel": 0,
-    "horizon": 2400,
-    "wait_ekf": 200,
+    "horizon": 2200,
+    "wait_ekf": 0,
     "step_every": 8,
     "save_every": 24,
     "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
@@ -67,7 +67,7 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 0.1
+        "obstacle_alpha": 0.3
     },
 
     "controller_config":{
@@ -83,8 +83,8 @@
     },
 
     "observer_config":{
-        "active": 0,
-        "gain": [10,10],
+        "active": 1,
+        "gain": [2,2],
         "num_points": 4
     },
 
@@ -92,17 +92,17 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 1e-3,
-        "solver_args": {"eps": 1e-7, "max_iters": 100}
+        "solver_args": {"eps": 1e-7, "max_iters": 1000}
     },
 
     "CBF_config":{
         "active": 1,
         "cbf_value_record": 0,
-        "threshold_ub": 88,
-        "threshold_lb": 46,
+        "threshold_ub": 800,
+        "threshold_lb": 100,
         "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
-        "compensation": 0.5
+        "compensation": 5
     },
 
     "ekf_config":{
