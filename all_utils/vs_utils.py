@@ -25,6 +25,39 @@ def one_point_image_jacobian(coord_in_cam, fx, fy):
 
     return np.vstack((J1, J2))
 
+def one_point_image_jacobian_normalized(x, y, Z):
+    """
+    x, y: normalized pixel coordinates (x = (x-cx)/fx, y = (y-cy)/fy)
+    Z: depth of the point in camera frame
+    """
+    J1 = np.array([-1/Z, 0, x/Z, x*y, -(1+x**2), y], dtype=np.float32)
+    J2 = np.array([0, -1/Z, y/Z, 1+y**2, -x*y, -x], dtype=np.float32)
+
+    return np.vstack((J1, J2))
+
+def one_point_depth_jacobian_normalized(x, y, Z):
+    """
+    x, y: normalized pixel coordinates (x = (x-cx)/fx, y = (y-cy)/fy)
+    Z: depth of the point in camera frame
+    """
+    J = np.array([0, 0, -1, -y*Z, x*Z, 0], dtype=np.float32)
+    return J
+
+def normalize_one_image_point(x, y, fx, fy, cx, cy):
+    x_norm = (x - cx) / fx
+    y_norm = (y - cy) / fy
+    return x_norm, y_norm
+
+def normalize_corners(corners, fx, fy, cx, cy):
+    """
+    corners: 2D array of shape (N, 2)
+    """
+    corners_norm = np.zeros_like(corners)
+    corners_norm[:, 0] = (corners[:, 0] - cx) / fx
+    corners_norm[:, 1] = (corners[:, 1] - cy) / fy
+
+    return corners_norm
+
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
