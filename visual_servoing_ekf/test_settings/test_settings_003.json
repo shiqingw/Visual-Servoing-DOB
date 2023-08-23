@@ -79,7 +79,7 @@
         "vertical_gain": 0.0,
         "joint_limit_gain": 1,
         "distance_gain":1,
-        "depth_target": 0.5,
+        "depth_target": 0.7,
         "fix_position_gain": 1
     },
 

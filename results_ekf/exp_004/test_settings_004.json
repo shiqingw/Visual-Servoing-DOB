@@ -68,7 +68,7 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 0.3
+        "obstacle_alpha": 1
     },
 
     "controller_config":{

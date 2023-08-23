@@ -411,21 +411,21 @@ def main():
             xd_yd = xd_yd_position
             # xd_yd = xd_yd_mean 
 
-            # J_active = J_image_cam_ekf[0:2*num_points]
-            # if observer_config["active"] == 1:
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.01*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
-            # elif ekf_config["active"] == 1:
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.01*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf[0:2*num_points])
-            # else:
-            #     speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.01*np.eye(2*num_points)) @ xd_yd
-
             J_active = J_image_cam_ekf[0:2*num_points]
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_dob[0:2*num_points])/2
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
             elif ekf_config["active"] == 1:
-                speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_ekf[0:2*num_points])/2
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf[0:2*num_points])
             else:
-                speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ xd_yd/2
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ xd_yd
+
+            # J_active = J_image_cam_ekf[0:2*num_points]
+            # if observer_config["active"] == 1:
+            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_dob[0:2*num_points])/2
+            # elif ekf_config["active"] == 1:
+            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_ekf[0:2*num_points])/2
+            # else:
+            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ xd_yd/2
 
             # print(speeds_in_cam_desired)
             # Map obstacle vertices to image
