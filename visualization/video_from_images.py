@@ -2,9 +2,17 @@ import cv2
 import os
 import time
 
-def create_video(image_folder, image_prefix, video_name, frame_rate):
+def create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to):
     images = [img for img in os.listdir(image_folder) if img.startswith(image_prefix) and img.endswith(".png")]
     images.sort()
+
+    print("Total images for the video: {}".format(len(images)))
+    if len(images) < repeat_to:
+        # Repeat the last image to make the video longer
+        for i in range(repeat_to - len(images)):
+            images.append(images[-1])
+    # print the number of total images
+    print("Total images with repeated last frame: {}".format(len(images)))
 
     frame = cv2.imread(os.path.join(image_folder, images[0]))
     height, width, layers = frame.shape
@@ -25,9 +33,9 @@ def create_video(image_folder, image_prefix, video_name, frame_rate):
 
 if __name__ == "__main__":
     image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_dob/exp_001'
-    image_prefix = 'screenshot'  # Images should start with this prefix
+    image_prefix = 'rgb'  # Images should start with this prefix
     video_name = image_folder + '/' + image_prefix + '_video.mp4'
     frame_rate = 10
-    time_delay = 0
+    repeat_to = 125
 
-    create_video(image_folder, image_prefix, video_name, frame_rate)
+    create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to)
