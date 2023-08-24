@@ -31,7 +31,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=3, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
