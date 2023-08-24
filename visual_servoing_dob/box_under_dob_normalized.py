@@ -227,12 +227,12 @@ def main():
 
     # Display trajs from last
     if test_settings["visualize_target_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
         p.addUserDebugPoints(summary["target_center"], [[1.,0.,0.]]*len(summary["target_center"]), pointSize=13, lifeTime=0.01)
 
     if test_settings["visualize_camera_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
         p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=13, lifeTime=0.01)
     

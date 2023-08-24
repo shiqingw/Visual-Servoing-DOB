@@ -32,10 +32,11 @@ def create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to):
     video.release()
 
 if __name__ == "__main__":
-    image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_dob/exp_001'
-    image_prefix = 'rgb'  # Images should start with this prefix
+    image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_dob/exp_002'
+    image_prefix = 'screenshot'  # Images should start with this prefix
+    # image_prefix = 'rgb'  # Images should start with this prefix
     video_name = image_folder + '/' + image_prefix + '_video.mp4'
     frame_rate = 10
-    repeat_to = 125
+    repeat_to = 130
 
     create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to)
