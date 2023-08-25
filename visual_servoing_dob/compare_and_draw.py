@@ -20,7 +20,7 @@ if __name__ == '__main__':
     linewidth = 6
 
     ###############################
-    print("==> Plot estimation error...")
+    print("==> Plot cbf ...")
     fig, ax = plt.subplots(figsize=(12,9), dpi=100, frameon=True)
     plt.rcParams.update({"text.usetex": True})
 
@@ -48,5 +48,5 @@ if __name__ == '__main__':
     results_dir = "{}/results_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), 0)
     name = " ".join(str(x) for x in exp_names)
     name = name.replace(" ", "_")
-    plt.savefig(os.path.join(results_dir, name + '_cbf.png'))
+    plt.savefig(os.path.join(results_dir, name + '.png'))
     plt.close(fig)

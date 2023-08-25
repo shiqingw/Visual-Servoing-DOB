@@ -8,14 +8,14 @@
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
-    "visualize_target_traj_from_last": 0,
-    "visualize_camera_traj_from_last": 0,
-    "zero_vel": 0,
-    "horizon": 3000,
+    "visualize_target_traj_from_last": 1,
+    "visualize_camera_traj_from_last": 1,
+    "zero_vel": 1,
+    "horizon": 3100,
     "wait_ekf": 0,
     "step_every": 8,
     "save_every": 24,
-    "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
+    "initial_joint_angles": [0.0, -0.75, 0.0, -2.356, 0.0, 1.6, 0.785, 0.001, 0.001],
 
     "joint_limits_config":{
         "lb":[-2.3093, -1.5133, -2.4937, -2.7478, -2.48, 0.8521, -2.6895, 0, 0],
@@ -24,18 +24,19 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "box_small.urdf",
-        "cameraDistance": 1.03,
-        "cameraYaw": 0,
-        "cameraPitch":-30,
-        "lookat":[0.5, 0.0, 0.3]
+        "obs_urdf": "square1.urdf",
+        "cameraDistance": 1.4,
+        "cameraYaw": 0.0,
+        "cameraPitch": -48.0,
+        "lookat":[0.4, 0.0, 0.25],
+        "robot_base_p_offset": [0,0,0.2]
     },
 
     "screenshot_config":{
-        "cameraDistance": 0.8,
+        "cameraDistance": 0.6,
         "cameraYaw": 0,
-        "cameraPitch":-30,
-        "lookat":[0.5, 0.0, 0.4],
+        "cameraPitch":-30.0,
+        "lookat":[0.2, 0.0, 0.6],
         "pixelWidth": 1280,
         "pixelHeight": 720,
         "nearPlane": 0.01,
@@ -46,47 +47,47 @@
     "camera_config":{
         "width": 1280,
         "height": 720,
-        "near": 0.02,
-        "far": 2.0,
+        "near": 0.15,
+        "far": 3.0,
         "fov": 60,
         "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
     },
 
     "apriltag_config":{
         "tag_size": 0.136,
-        "apriltag_radius": 0.15,
-        "initial_position": [0.7, 0.0, 0.005],
-        "center_position": [0.85, 0.0, 0.005],
-        "augular_velocity": 0.5,
+        "apriltag_radius": 0.11,
+        "initial_position": [0.37, 0.0, 0.005],
+        "center_position": [0.48, 0.0, 0.005],
+        "augular_velocity": 0,
         "offset_angle": 3.14
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.8, -0.3, 0.25],
-        "lineToXYZ" : [0.8, 0.3, 0.25],
+        "lineFromXYZ": [0.46, -0.05, 0.30],
+        "lineToXYZ" : [0.46, 0.05, 0.30],
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 1
+        "obstacle_alpha": 0.5
     },
 
     "controller_config":{
         "num_points": 4,
         "mean_gain": [1.0,1.0],
-        "variance_gain": [1,1],
-        "variance_target": [4500, 4500],
-        "horizontal_gain": 0.0,
+        "variance_gain": [1.0,1.0],
+        "variance_target": [3000, 3000],
+        "horizontal_gain": 1.0,
         "vertical_gain": 0.0,
         "joint_limit_gain": 1,
         "distance_gain":1,
         "depth_target": 0.7,
-        "fix_position_gain": 1
+        "fix_position_gain": 3
     },
 
     "optimization_config":{
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
-        "exp_coef": 40,
+        "exp_coef": 600,
         "solver_args": {"eps": 1e-7, "max_iters": 2000}
     },
 
@@ -95,9 +96,9 @@
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,
-        "barrier_alpha": 1,
+        "barrier_alpha": 1.0,
         "scaling_lb": 1.03,
-        "compensation": 0.1
+        "compensation": 2
     },
 
     "observer_config":{
@@ -108,10 +109,10 @@
     },
 
     "ekf_config":{
-        "active": 1,
+        "active": 0,
         "active_for_cbf": 0,
         "P0_unnormalized": [1, 1, 2.5e-5, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4],
-        "Q": [1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1, 1, 1e-2],
+        "Q": [1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-1, 1e-1, 1e-4],
         "R_unnormalized": [1, 1, 2.5e-5],
         "depth_measurement_var": 2.5e-5
     }
