@@ -53,7 +53,7 @@
     },
 
     "apriltag_config":{
-        "tag_size": 0.136,
+        "tag_size": 0.135,
         "apriltag_radius": 0.15,
         "initial_position": [0.7, 0.0, 0.005],
         "center_position": [0.85, 0.0, 0.005],
@@ -92,7 +92,7 @@
 
     "CBF_config":{
         "active": 1,
-        "cbf_value_record": 0,
+        "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,
         "barrier_alpha": 1,

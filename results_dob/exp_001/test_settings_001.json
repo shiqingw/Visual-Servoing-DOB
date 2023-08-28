@@ -8,9 +8,9 @@
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
-    "visualize_target_traj_from_last": 0,
-    "visualize_camera_traj_from_last": 0,
-    "zero_vel": 0,
+    "visualize_target_traj_from_last": 1,
+    "visualize_camera_traj_from_last": 1,
+    "zero_vel": 1,
     "horizon": 3000,
     "wait_ekf": 0,
     "step_every": 8,
@@ -57,7 +57,7 @@
         "apriltag_radius": 0.15,
         "initial_position": [0.7, 0.0, 0.005],
         "center_position": [0.85, 0.0, 0.005],
-        "augular_velocity": 0.5,
+        "augular_velocity": 0,
         "offset_angle": 3.14
     },
 
@@ -91,7 +91,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,

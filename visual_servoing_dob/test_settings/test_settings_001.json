@@ -91,7 +91,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,
