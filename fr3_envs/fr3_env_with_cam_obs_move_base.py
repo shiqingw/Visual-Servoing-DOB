@@ -56,7 +56,7 @@ class FR3CameraSim(Env):
         p.resetBasePositionAndOrientation(self.robotID, self.base_p_offset, base_quat)
 
         # Load AprilTag, obstacle, and the base under the robot
-        self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
+        self.april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
         self.obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
         self.box_base = p.loadURDF("box_base.urdf", useFixedBase=True)
 

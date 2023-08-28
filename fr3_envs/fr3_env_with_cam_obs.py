@@ -53,7 +53,7 @@ class FR3CameraSim(Env):
         self.robotID = p.loadURDF("{}.urdf".format(model_name), useFixedBase=True)
 
         # Load AprilTag board
-        self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
+        self.april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
         self.obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
         # self.obstacle_ID = p.loadURDF("apriltag_id1.urdf", useFixedBase=True)
         # april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])

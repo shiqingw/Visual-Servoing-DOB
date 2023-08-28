@@ -115,7 +115,7 @@ def main():
     projectionMatrix = p.computeProjectionMatrixFOV(fov, pixelWidth / pixelHeight, nearPlane, farPlane)
 
     # Reset apriltag position
-    april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
+    april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
     p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_config["initial_position"], april_tag_quat)
     info = env.get_image()
 
@@ -159,7 +159,9 @@ def main():
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
-    p.resetBasePositionAndOrientation(env.obstacle_ID, (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0, obstacle_quat)
+    obstacle_pos = np.array([0.05,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
+    obstacle_pos[-1] = 0
+    p.resetBasePositionAndOrientation(env.obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Differentiable optimization layer
@@ -244,7 +246,7 @@ def main():
         apriltag_angle = augular_velocity*max(0,i-wait_ekf)*dt + apriltag_config["offset_angle"]
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
-        april_tag_quat = p.getQuaternionFromEuler([np.pi/2, 0, np.pi/2 + 0*dt*max(0,i-wait_ekf)])
+        april_tag_quat = p.getQuaternionFromEuler([0, 0, 0*dt*max(0,i-wait_ekf)])
         p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
 
         if i % step_every == 0:
@@ -318,7 +320,7 @@ def main():
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw apritag vertices in world
+            # # Draw apritag vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world_true[:,0:3], colors, pointSize=1, lifeTime=0.01)
 
