@@ -5,7 +5,7 @@
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
-    "save_scaling_function": 0,
+    "save_scaling_function": 1,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
     "visualize_target_traj_from_last": 0,

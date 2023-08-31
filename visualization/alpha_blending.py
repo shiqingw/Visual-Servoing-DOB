@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
   
-img1 = cv2.imread('results_diff_opt/exp_004/rgb_0.png')
-img2 = cv2.imread('results_diff_opt/exp_004/scaling_functions_0.png')
+img1 = cv2.imread('results_dob/exp_002/rgb_0000.png')
+img2 = cv2.imread('results_dob/exp_002/scaling_functions_0000.png')
 
 ind = np.where(img2 >1)
 img2[ind] = img1[ind]
