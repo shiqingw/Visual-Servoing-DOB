@@ -5,7 +5,7 @@ from matplotlib.lines import Line2D
 
 def get_line(point1, point2):
     line = Line2D([point1[0], point2[0]],
-              [point1[1], point2[1]], linewidth=4, color='tab:red', linestyle='--')
+              [point1[1], point2[1]], linewidth=4, color='black', linestyle='--')
     return line
 
 N = 3000
@@ -22,13 +22,13 @@ cmap = colors.ListedColormap(['white', 'tab:blue'])
 bounds=[0,1,10]
 norm = colors.BoundaryNorm(bounds, cmap.N)
 
-im = plt.imshow((aprox_triangle_exp(x,y)<=3).astype(int) , 
-                extent=(x.min(),x.max(),y.min(),y.max()),origin="lower",cmap=cmap)
-
 points = np.array([[0,0],[5,0],[0,5]])
 ax.add_line(get_line(points[0], points[1]))
 ax.add_line(get_line(points[1], points[2]))
 ax.add_line(get_line(points[2], points[0]))
+
+im = plt.imshow((aprox_triangle_exp(x,y)<=3).astype(int) , 
+                extent=(x.min(),x.max(),y.min(),y.max()),origin="lower",cmap=cmap, alpha=0.8)
 
 tickfontsize = 20
 plt.xticks(fontsize=tickfontsize)
