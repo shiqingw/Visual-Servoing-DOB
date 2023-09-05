@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_with_cam_obs_move_base import FR3CameraSim
+from fr3_envs.fr3_env_cam_obs_base import FR3CameraSim
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import axis_angle_from_rot_mat, one_point_image_jacobian, skew, skew_to_vector, point_in_image

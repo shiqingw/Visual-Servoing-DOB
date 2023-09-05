@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_cam_obs_base import FR3CameraSim
+from fr3_envs.fr3_env_cam_obs_base_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
@@ -39,7 +39,7 @@ def main():
 
     args = parser.parse_args()
     exp_num = args.exp_num
-    results_dir = "{}/results_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
+    results_dir = "{}/results_collision_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
     test_settings_path = "{}/test_settings/test_settings_{:03d}.json".format(str(Path(__file__).parent), exp_num)
     
     if not os.path.exists(results_dir):
@@ -82,13 +82,15 @@ def main():
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
     robot_base_p_offset = simulator_config["robot_base_p_offset"]
+    crude_type = simulator_config["crude_type"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'),
+                           crude_type = crude_type)
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
+                           obs_urdf=obs_urdf, render_mode="human", record_path=None, crude_type = crude_type)
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,

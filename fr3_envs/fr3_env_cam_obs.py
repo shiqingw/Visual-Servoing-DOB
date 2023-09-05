@@ -1,15 +1,15 @@
 import copy
 from typing import Optional
-import pkgutil
-egl = pkgutil.get_loader('eglRenderer')
 
 import numpy as np
+import numpy.linalg as LA
 import pinocchio as pin
 import pybullet as p
 import pybullet_data
 from gymnasium import Env, spaces
 from pinocchio.robot_wrapper import RobotWrapper
 from scipy.spatial.transform import Rotation
+
 
 import sys
 from pathlib import Path
@@ -24,7 +24,7 @@ class FR3CameraSim(Env):
         "render_modes": ["human", "rgb_array"],
     }
 
-    def __init__(self, camera_config, enable_gui_camera_data, render_mode: Optional[str] = None, record_path=None):
+    def __init__(self, camera_config, enable_gui_camera_data, obs_urdf="box.urdf", render_mode: Optional[str] = None, record_path=None):
         if render_mode == "human":
             self.client = p.connect(p.GUI)
             # Improves rendering performance on M1 Macs
@@ -38,8 +38,6 @@ class FR3CameraSim(Env):
         p.setTimeStep(1 / 240)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        # plugin = p.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
-        # print("plugin=", plugin)
 
         # Load plane
         p.loadURDF("plane.urdf")
@@ -53,10 +51,12 @@ class FR3CameraSim(Env):
         self.robotID = p.loadURDF("{}.urdf".format(model_name), useFixedBase=True)
 
         # Load AprilTag board
-        self.april_tag_ID = p.loadURDF("apriltag_id0.urdf", useFixedBase=True)
-        # april_tag_quat = p.getQuaternionFromEuler([np.pi / 2, 0, np.pi / 2])
+        self.april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
+        self.obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
+        # self.obstacle_ID = p.loadURDF("apriltag_id1.urdf", useFixedBase=True)
+        # april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
         # p.resetBasePositionAndOrientation(
-        #     self.april_tag_ID, [0.35, 0.0, 0.005], april_tag_quat
+        #     self.obstacle_ID, [0.4, 0.2, 0.1], april_tag_quat
         # )
 
         # Build pin_robot
@@ -65,12 +65,12 @@ class FR3CameraSim(Env):
         # Get active joint ids
         self.active_joint_ids = [0, 1, 2, 3, 4, 5, 6, 10, 11]
 
-        # Disable the velocity control on the joints as we use torque control.
+        # Enable the velocity control on the joints 
         p.setJointMotorControlArray(
             self.robotID,
             self.active_joint_ids,
             p.VELOCITY_CONTROL,
-            forces=500*np.ones(9),
+            forces=1000*np.ones(9),
         )
 
         # Get number of joints
@@ -136,10 +136,7 @@ class FR3CameraSim(Env):
         cameraDistance=1.4,
         cameraYaw=66.4,
         cameraPitch=-16.2,
-        lookat=[0.0, 0.0, 0.0]
-    ):
-        super().reset(seed=seed)
-
+        lookat=[0.0, 0.0, 0.0],
         target_joint_angles = [
             0.0,
             -0.785398163,
@@ -151,6 +148,8 @@ class FR3CameraSim(Env):
             0.001,
             0.001,
         ]
+    ):
+        super().reset(seed=seed)
 
         self.q_nominal = np.array(target_joint_angles)
 
@@ -167,21 +166,6 @@ class FR3CameraSim(Env):
                 p.STATE_LOGGING_VIDEO_MP4, self.record_path
             )
        
-        R_camera = info["R_CAMERA"]
-        q = Rotation.from_matrix(R_camera).as_quat()
-        view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
-        
-        img = p.getCameraImage(
-            self.width,
-            self.height,
-            viewMatrix=view_matrix,
-            projectionMatrix=self.projection_matrix
-        )
-
-        info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
-        info["depth"] = np.reshape(img[3], (self.height, self.width))
-        # info["seg"] = np.reshape(img[4], (self.height, self.width))* 1. / 255.
-
         return info
 
     def get_info(self, q, dq):
@@ -240,8 +224,8 @@ class FR3CameraSim(Env):
             self.CAMERA_FRAME_ID, self.jacobian_frame
         )
 
-        # Get pseudo-inverse of frame Jacobian
-        pinv_jac = np.linalg.pinv(jacobian)
+        # # Get pseudo-inverse of frame Jacobian
+        # pinv_jac = np.linalg.pinv(jacobian)
 
         dJ = pin.getFrameJacobianTimeVariation(
             self.robot.model, self.robot.data, self.EE_FRAME_ID, self.jacobian_frame
@@ -275,7 +259,7 @@ class FR3CameraSim(Env):
         )
 
         p_hand, R_hand, q_HAND = self.compute_crude_location(
-            np.eye(3), np.array(([0.0], [0.0], [0.06])), self.FR3_HAND_FRAME_ID
+            np.eye(3), np.array(([0.0], [0.0], [0.02])), self.FR3_HAND_FRAME_ID
         )
 
         p_camera, R_camera, q_CAMERA = self.compute_crude_location(
@@ -291,7 +275,7 @@ class FR3CameraSim(Env):
             "M(q)^{-1}": Minv,
             "nle": nle,
             "G": self.robot.gravity(q),
-            "pJ_EE": pinv_jac,
+            # "pJ_EE": pinv_jac,
             "R_LINK3": copy.deepcopy(R_link3),
             "P_LINK3": copy.deepcopy(p_link3),
             "q_LINK3": copy.deepcopy(q_LINK3),
@@ -326,8 +310,23 @@ class FR3CameraSim(Env):
             "R_CAMERA": copy.deepcopy(R_camera),
             "P_CAMERA": copy.deepcopy(p_camera),
             "q_CAMERA": copy.deepcopy(q_CAMERA),
-            "J_CAMERA": jacobian_camera,
+            "J_CAMERA": copy.deepcopy(jacobian_camera),
         }
+
+        # Calculate manipulability
+        w = np.sqrt(LA.det(jacobian_camera @ jacobian_camera.T))
+        dwdq = np.zeros(len(q), dtype = np.float32)
+        delta = 0.0001
+        for i in range(len(q)):
+            delta_q = np.zeros_like(q)
+            delta_q[i] = delta
+            self.robot.computeJointJacobians(q+delta_q)
+            jacobian_camera = self.robot.getFrameJacobian(
+                                self.CAMERA_FRAME_ID, self.jacobian_frame)
+            w_new = np.sqrt(LA.det(jacobian_camera @ jacobian_camera.T))
+            dwdq[i] = (w_new-w)/delta
+            
+        info["GRAD_MANIPULABILITY"] = dwdq
 
         return info
 
@@ -361,7 +360,9 @@ class FR3CameraSim(Env):
                 self.width,
                 self.height,
                 viewMatrix=view_matrix,
-                projectionMatrix=self.projection_matrix
+                projectionMatrix=self.projection_matrix,
+                flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+                renderer=p.ER_BULLET_HARDWARE_OPENGL
             )
 
             info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
@@ -378,12 +379,14 @@ class FR3CameraSim(Env):
         R_camera = info["R_CAMERA"]
         q = Rotation.from_matrix(R_camera).as_quat()
         view_matrix = cvPose2BulletView(q, info["P_CAMERA"])
-        
+
         img = p.getCameraImage(
             self.width,
             self.height,
             viewMatrix=view_matrix,
-            projectionMatrix=self.projection_matrix
+            projectionMatrix=self.projection_matrix,
+            flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+            renderer=p.ER_BULLET_HARDWARE_OPENGL
         )
 
         info["rgb"] = np.reshape(img[2], (self.height, self.width, 4))
@@ -457,30 +460,3 @@ class FR3CameraSim(Env):
         q = Rotation.from_matrix(Rot).as_quat()
 
         return p, Rot, q
-
-    def display_ball(self, p_des, radius=.01, color=[1.,1.,1.,1.]):
-        '''
-        Create a sphere visual object in PyBullet (no collision)
-        Transformed because reference p_des is in pinocchio WORLD frame, which is different
-        than PyBullet WORLD frame if the base placement in the simulator is not (eye(3), zeros(3))
-        INPUT: 
-            p_des           : desired position of the ball in pinocchio.WORLD
-            robot_base_pose : initial pose of the robot BASE in bullet.WORLD
-            RADIUS          : radius of the ball
-            COLOR           : color of the ball
-        '''
-        # pose of the sphere in bullet WORLD
-        M = pin.SE3(np.eye(3), p_des)  # ok for talos reduced since pin.W = bullet.W but careful with talos_arm if base is moved
-        quat = pin.SE3ToXYZQUAT(M)     
-        visualBallId = p.createVisualShape(shapeType=p.GEOM_SPHERE,
-                                        radius=radius,
-                                        rgbaColor=color,
-                                        visualFramePosition=quat[:3],
-                                        visualFrameOrientation=quat[3:])
-        ballId = p.createMultiBody(baseMass=0.,
-                                baseInertialFramePosition=[0.,0.,0.],
-                                baseVisualShapeIndex=visualBallId,
-                                basePosition=[0.,0.,0.],
-                                useMaximalCoordinates=True)
-
-        return ballId

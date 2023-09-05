@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_cam_obs_base import FR3CameraSim
+from fr3_envs.fr3_env_cam_obs_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
@@ -31,7 +31,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -39,7 +39,7 @@ def main():
 
     args = parser.parse_args()
     exp_num = args.exp_num
-    results_dir = "{}/results_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
+    results_dir = "{}/results_collision_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
     test_settings_path = "{}/test_settings/test_settings_{:03d}.json".format(str(Path(__file__).parent), exp_num)
     
     if not os.path.exists(results_dir):
@@ -81,14 +81,14 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
-    robot_base_p_offset = simulator_config["robot_base_p_offset"]
+    crude_type = simulator_config["crude_type"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human",
+                                     record_path=os.path.join(results_dir, 'record.mp4'), crude_type=crude_type)
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=None)
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human",
+                                     record_path=None, crude_type=crude_type)
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
@@ -154,12 +154,12 @@ def main():
     #                    lifeTime = obstacle_config["lifeTime"])
     obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
                                          np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
+                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
+                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
-    obstacle_pos = np.array([0.05,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
+    obstacle_pos = np.array([0.1,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(env.obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
@@ -324,7 +324,7 @@ def main():
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world_true[:,0:3], colors, pointSize=1, lifeTime=0.01)
 
-            # # Draw obstacle vertices in world
+            # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -404,22 +404,19 @@ def main():
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
             # null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             # xd_yd = xd_yd_position + null_position @ xd_yd_mean
             # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
-            # xd_yd = xd_yd_mean + null_mean @ xd_yd_distance
             xd_yd = xd_yd_position
-            # xd_yd = xd_yd_mean 
 
-            J_active = J_image_cam_ekf[0:2*num_points]
+            J_active = J_image_cam_true[0:2*num_points]
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
             elif ekf_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf[0:2*num_points])
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf[0:2*num_points])
             else:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.001*np.eye(2*num_points)) @ xd_yd
+                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ xd_yd
 
             # J_active = J_image_cam_ekf[0:2*num_points]
             # if observer_config["active"] == 1:
@@ -454,7 +451,7 @@ def main():
                 b_obstacle_np = b_obstacle_val.detach().numpy()
                 tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
-                # print(tmp)
+                print(tmp)
      
                 if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                     time1 = time.time()
@@ -527,7 +524,6 @@ def main():
                     b_obstacle_np = b_obstacle_val.detach().numpy()
                     tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
                     tmp = np.max(tmp, axis=1)
-                    print(tmp)
 
                     if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                         time1 = time.time()
