@@ -220,6 +220,9 @@ class FR3CameraSim(Env):
         jacobian_link7 = self.robot.getFrameJacobian(
             self.FR3_LINK7_FRAME_ID, self.jacobian_frame
         )
+        jacobian_hand = self.robot.getFrameJacobian(
+            self.FR3_HAND_FRAME_ID, self.jacobian_frame
+        )
         jacobian_camera = self.robot.getFrameJacobian(
             self.CAMERA_FRAME_ID, self.jacobian_frame
         )
@@ -303,6 +306,7 @@ class FR3CameraSim(Env):
             "R_HAND": copy.deepcopy(R_hand),
             "P_HAND": copy.deepcopy(p_hand),
             "q_HAND": copy.deepcopy(q_HAND),
+            "J_HAND": jacobian_hand,
             "J_EE": jacobian,
             "dJ_EE": dJ,
             "R_EE": copy.deepcopy(self.robot.data.oMf[self.EE_FRAME_ID].rotation),

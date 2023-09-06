@@ -1,9 +1,17 @@
+import time
+from sys import platform
+if platform == "darwin":
+    print("==> Initializing Julia")
+    time1 = time.time()
+    from julia.api import Julia
+    jl = Julia(compiled_modules=False)
+    time2 = time.time()
+    print("==> Initializing Julia took {} seconds".format(time2-time1))
 import argparse
 import json
 import os
 import shutil
 import apriltag
-import time
 
 import numpy as np
 import numpy.linalg as LA
@@ -28,6 +36,11 @@ from all_utils.vs_utils import one_point_depth_jacobian_normalized, normalize_on
 from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
 from ekf.ekf_ibvs_normalized import EKF_IBVS
+
+try:
+    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
+except:
+    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
@@ -59,6 +72,7 @@ def main():
     controller_config = test_settings["controller_config"]
     observer_config = test_settings["observer_config"]
     CBF_config = test_settings["CBF_config"]
+    collision_cbf_config = test_settings["collision_cbf_config"]
     optimization_config = test_settings["optimization_config"]
     ekf_config = test_settings["ekf_config"]
 
@@ -165,6 +179,17 @@ def main():
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(env.obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
+
+    # Initialize differentiable collision
+    polygon_b_in_body = np.array([0.05, 0.05, 0.00025, 0.05, 0.05, 0.00025])
+    obstacle_r = obstacle_pos + np.array([0,0,0.3])
+    obstacle_q = np.array([1.0,0,0,0])
+    print("==> Initializing differentiable collision (Julia)")
+    time1 = time.time()
+    collision_cbf = DifferentiableCollisionCBF(polygon_b_in_body, obstacle_r, obstacle_q, gamma=5.0, alpha_offset=1.03)
+    vel = collision_cbf.filter_dq(np.zeros(9), info)
+    time2 = time.time()
+    print("==> Initializing differentiable collision (Julia) took {} seconds".format(time2-time1))
 
     # Differentiable optimization layer
     nv = 2
@@ -499,7 +524,6 @@ def main():
                         proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                     )
                     cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
-                    cbf_qp.settings.eps_abs = 1.0e-9
                     cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
@@ -576,10 +600,13 @@ def main():
                     proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                 )
             joint_limits_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q, C=C)
-            joint_limits_qp.settings.eps_abs = 1.0e-9
             joint_limits_qp.solve()
             vel = joint_limits_qp.results.x
             vel[-2:] = 0
+
+            # CBF for collision
+            if collision_cbf_config["active"] == 1:
+                vel = collision_cbf.filter_dq(vel, info)
 
             if test_settings["save_screeshot"] == 1 and i % save_every == 0:
                 screenshot = p.getCameraImage(pixelWidth,

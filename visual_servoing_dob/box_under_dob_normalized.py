@@ -491,7 +491,6 @@ def main():
                         proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                     )
                     cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
-                    cbf_qp.settings.eps_abs = 1.0e-9
                     cbf_qp.solve()
 
                     speeds_in_cam = cbf_qp.results.x
@@ -567,7 +566,6 @@ def main():
                     proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
                 )
             joint_limits_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q, C=C)
-            joint_limits_qp.settings.eps_abs = 1.0e-9
             joint_limits_qp.solve()
             vel = joint_limits_qp.results.x
             vel[-2:] = 0

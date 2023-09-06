@@ -1,7 +1,7 @@
 {
     "image_save_format": "png",
     "record": 0,
-    "save_screeshot": 1,
+    "save_screeshot": 0,
     "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
@@ -99,6 +99,13 @@
         "barrier_alpha": 1,
         "scaling_lb": 1.03,
         "compensation": 0.1
+    },
+
+    "collision_cbf_config":{
+        "active": 1,
+        "cbf_value_record": 1,
+        "barrier_gamma": 5,
+        "alpha_offset": 1.03
     },
 
     "observer_config":{
