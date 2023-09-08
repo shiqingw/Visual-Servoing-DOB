@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_cam_obs_base_collision import FR3CameraSimCollision
+from fr3_envs.fr3_env_cam_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
@@ -99,12 +99,16 @@ def main():
     crude_type = simulator_config["crude_type"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'),
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_pos=robot_base_p_offset, 
+                           render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'),
                            crude_type = crude_type)
     else:
-        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_translation=robot_base_p_offset, 
-                           obs_urdf=obs_urdf, render_mode="human", record_path=None, crude_type = crude_type)
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_pos=robot_base_p_offset, 
+                           render_mode="human", record_path=None, crude_type = crude_type)
+        
+    obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
+    april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
+    box_base = p.loadURDF("box_base.urdf", useFixedBase=True)
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
@@ -132,8 +136,7 @@ def main():
 
     # Reset apriltag position
     april_tag_quat = p.getQuaternionFromEuler([0, 0, 0])
-    p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_config["initial_position"], april_tag_quat)
-    info = env.get_image()
+    p.resetBasePositionAndOrientation(april_tag_ID, apriltag_config["initial_position"], april_tag_quat)
 
     # Records
     num_points = controller_config["num_points"]
@@ -177,19 +180,20 @@ def main():
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
     obstacle_pos = np.array([0.05,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
     obstacle_pos[-1] = 0
-    p.resetBasePositionAndOrientation(env.obstacle_ID, obstacle_pos, obstacle_quat)
-    p.changeVisualShape(env.obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
+    p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
+    p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Initialize differentiable collision
-    polygon_b_in_body = np.array([0.05, 0.05, 0.00025, 0.05, 0.05, 0.00025])
-    obstacle_r = obstacle_pos + np.array([0,0,0.3])
-    obstacle_q = np.array([1.0,0,0,0])
-    print("==> Initializing differentiable collision (Julia)")
-    time1 = time.time()
-    collision_cbf = DifferentiableCollisionCBF(polygon_b_in_body, obstacle_r, obstacle_q, gamma=5.0, alpha_offset=1.03)
-    vel = collision_cbf.filter_dq(np.zeros(9), info)
-    time2 = time.time()
-    print("==> Initializing differentiable collision (Julia) took {} seconds".format(time2-time1))
+    if collision_cbf_config["active"] == 1: 
+        polygon_b_in_body = np.array([0.05, 0.05, 0.00025, 0.05, 0.05, 0.00025])
+        obstacle_r = obstacle_pos + np.array([0,0,0.3])
+        obstacle_q = np.array([1.0,0,0,0])
+        print("==> Initializing differentiable collision (Julia)")
+        time1 = time.time()
+        collision_cbf = DifferentiableCollisionCBF(polygon_b_in_body, obstacle_r, obstacle_q, gamma=5.0, alpha_offset=1.03)
+        vel = collision_cbf.filter_dq(np.zeros(9), info)
+        time2 = time.time()
+        print("==> Initializing differentiable collision (Julia) took {} seconds".format(time2-time1))
 
     # Differentiable optimization layer
     nv = 2
@@ -274,7 +278,7 @@ def main():
         apriltag_radius = apriltag_config["apriltag_radius"]
         apriltag_position = np.array([apriltag_radius*np.cos(apriltag_angle), apriltag_radius*np.sin(apriltag_angle), 0]) + apriltag_config["center_position"]
         april_tag_quat = p.getQuaternionFromEuler([0, 0, 0*dt*max(0,i-wait_ekf)])
-        p.resetBasePositionAndOrientation(env.april_tag_ID, apriltag_position, april_tag_quat)
+        p.resetBasePositionAndOrientation(april_tag_ID, apriltag_position, april_tag_quat)
 
         if i % step_every == 0:
             # Detect corners
