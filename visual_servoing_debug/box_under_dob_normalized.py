@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from fr3_envs.fr3_env_cam_obs import FR3CameraSim
+from fr3_envs.fr3_env_cam_debug_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
@@ -39,7 +39,7 @@ def main():
 
     args = parser.parse_args()
     exp_num = args.exp_num
-    results_dir = "{}/results_ekf/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
+    results_dir = "{}/results_debug/exp_{:03d}".format(str(Path(__file__).parent.parent), exp_num)
     test_settings_path = "{}/test_settings/test_settings_{:03d}.json".format(str(Path(__file__).parent), exp_num)
     
     if not os.path.exists(results_dir):
@@ -83,15 +83,30 @@ def main():
     lookat = simulator_config["lookat"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'))
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human",
+                                    record_path=os.path.join(results_dir, 'record.mp4'), crude_type="ellipsoid")
     else:
-        env = FR3CameraSim(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", record_path=None)
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, obs_urdf, render_mode="human", 
+                                    record_path=None, crude_type="ellipsoid")
  
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
                      lookat = lookat,
                      target_joint_angles = test_settings["initial_joint_angles"])
+    frame_names = [
+            "LINK3",
+            "LINK4",
+            "LINK5_1",
+            "LINK5_2",
+            "LINK6",
+            "LINK7",
+            "HAND",
+        ]
+    for i in range(7):
+        p.changeVisualShape(env.robotID, i, rgbaColor=[1., 0.87, 0.68, 0.3])
+    for link in frame_names:
+        p.addUserDebugPoints([info[f"P_{link}"]], [[1,0,0]], pointSize=10, lifeTime=0.01)
     
     # Pybullet GUI screenshot
     cameraDistance = screenshot_config["cameraDistance"]
@@ -229,14 +244,14 @@ def main():
 
     # Display trajs from last
     if test_settings["visualize_target_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
-        p.addUserDebugPoints(summary["target_center"], [[1.,0.,0.]]*len(summary["target_center"]), pointSize=13, lifeTime=0.01)
+        p.addUserDebugPoints(summary["target_center"], [[1.,0.,0.]]*len(summary["target_center"]), pointSize=5, lifeTime=0.01)
 
     if test_settings["visualize_camera_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_diff_opt_3_points/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
-        p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=13, lifeTime=0.01)
+        p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=5, lifeTime=0.01)
     
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
@@ -370,21 +385,21 @@ def main():
             # Compute desired pixel velocity (mean)
             mean_gain = np.diag(controller_config["mean_gain"])
             J_mean = 1/num_points*np.tile(np.eye(2), num_points)
-            error_mean = np.mean(corners_ekf_normalized[0:num_points,:], axis=0) - mean_target_normalized
+            error_mean = np.mean(corners_raw_normalized[0:num_points,:], axis=0) - mean_target_normalized
             xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Compute desired pixel velocity (variance)
             variance_gain = np.diag(controller_config["variance_gain"])
-            J_variance = np.tile(- np.diag(np.mean(corners_ekf_normalized[0:num_points,:], axis=0)), num_points)
-            J_variance[0,0::2] += corners_ekf_normalized[0:num_points,0]
-            J_variance[1,1::2] += corners_ekf_normalized[0:num_points,1]
+            J_variance = np.tile(- np.diag(np.mean(corners_raw_normalized[0:num_points,:], axis=0)), num_points)
+            J_variance[0,0::2] += corners_raw_normalized[0:num_points,0]
+            J_variance[1,1::2] += corners_raw_normalized[0:num_points,1]
             J_variance = 2/num_points*J_variance
-            error_variance = np.var(corners_ekf_normalized[0:num_points,:], axis = 0) - variance_target_normalized
+            error_variance = np.var(corners_raw_normalized[0:num_points,:], axis = 0) - variance_target_normalized
             xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
 
             # Compute desired pixel velocity (distance)
             distance_gain = controller_config["distance_gain"]
-            tmp = corners_ekf_normalized - desired_corners_normalized
+            tmp = corners_raw_normalized - desired_corners_normalized
             error_distance = np.sum(tmp**2, axis=1)[0:num_points]
             J_distance = np.zeros((num_points, 2*num_points), dtype=np.float32)
             for ii in range(num_points):
@@ -394,22 +409,20 @@ def main():
 
             # Compute desired pixel velocity (position)
             fix_position_gain = controller_config["fix_position_gain"]
-            error_position = (corners_ekf_normalized - desired_corners_normalized).reshape(-1)
+            error_position = (corners_raw_normalized - desired_corners_normalized).reshape(-1)
             J_position = np.eye(2*num_points, dtype=np.float32)
             xd_yd_position = - fix_position_gain * LA.pinv(J_position) @ error_position
 
             # Map to the camera speed expressed in the camera frame
             # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
             # null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # null_variance = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_variance) @ J_variance
             # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
             # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
             # xd_yd = xd_yd_position + null_position @ xd_yd_mean
             # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
             xd_yd = xd_yd_position
-            # xd_yd = xd_yd_mean 
 
-            J_active = J_image_cam_ekf[0:2*num_points]
+            J_active = J_image_cam_true[0:2*num_points]
             if observer_config["active"] == 1:
                 speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
             elif ekf_config["active"] == 1:
@@ -433,7 +446,7 @@ def main():
 
             if CBF_config["active"] == 1:
                 # Construct CBF and its constraint
-                target_coords = torch.tensor(corners_ekf_normalized, dtype=torch.float32, requires_grad=True)
+                target_coords = torch.tensor(corners_raw_normalized, dtype=torch.float32, requires_grad=True)
                 x_target = target_coords[:,0]
                 y_target = target_coords[:,1]
                 A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
@@ -448,7 +461,7 @@ def main():
                 # check if the obstacle is far to avoid numerical instability
                 A_obstacle_np = A_obstacle_val.detach().numpy()
                 b_obstacle_np = b_obstacle_val.detach().numpy()
-                tmp = kappa*(corners_ekf_normalized @ A_obstacle_np.T - b_obstacle_np)
+                tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
                 tmp = np.max(tmp, axis=1)
                 print(tmp)
      
@@ -456,7 +469,7 @@ def main():
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])
-                    CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
+                    CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
                     # print(alpha_sol, p_sol)
                     print(CBF)
                     alpha_sol.backward()
@@ -484,8 +497,8 @@ def main():
                         d_hat_cbf = d_hat_dob
                     else:
                         d_hat_cbf = np.zeros(2*num_points, dtype=np.float32)
-                    lb_CBF = [-CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
-                            - grad_CBF_disturbance @ d_hat_cbf]
+                    lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
+                            - grad_CBF_disturbance @ d_hat_cbf
                     H = np.eye(6)
                     g = -speeds_in_cam_desired
 
@@ -505,7 +518,7 @@ def main():
                 speeds_in_cam = speeds_in_cam_desired
                 if CBF_config["cbf_value_record"] == 1:
                     # Construct CBF and its constraint
-                    target_coords = torch.tensor(corners_ekf_normalized, dtype=torch.float32, requires_grad=True)
+                    target_coords = torch.tensor(corners_raw_normalized, dtype=torch.float32, requires_grad=True)
                     x_target = target_coords[:,0]
                     y_target = target_coords[:,1]
                     A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
@@ -520,14 +533,14 @@ def main():
                     # check if the obstacle is far to avoid numerical instability
                     A_obstacle_np = A_obstacle_val.detach().numpy()
                     b_obstacle_np = b_obstacle_val.detach().numpy()
-                    tmp = kappa*(corners_ekf_normalized @ A_obstacle_np.T - b_obstacle_np)
+                    tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
                     tmp = np.max(tmp, axis=1)
 
                     if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
                         time1 = time.time()
                         alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                     solver_args=optimization_config["solver_args"])
-                        CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
+                        CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
                         # print(alpha_sol, p_sol)
                         print(CBF)
                         alpha_sol.backward()
@@ -645,7 +658,7 @@ def main():
             S_in_cam = R_world_to_cam @ skew(omega_in_world) @ R_world_to_cam.T
             omega_in_cam = skew_to_vector(S_in_cam)
             speeds_in_cam = np.hstack((v_in_cam, omega_in_cam))
-            epsilon += step_every * dt * observer_gain @ (J_image_cam_raw @speeds_in_cam + d_hat_dob)
+            epsilon += step_every * dt * observer_gain @ (J_image_cam_true @speeds_in_cam + d_hat_dob)
             ekf.predict(dt*step_every, speeds_in_cam)
 
             # Records

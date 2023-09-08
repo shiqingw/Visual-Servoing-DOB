@@ -460,7 +460,7 @@ def main():
                     time1 = time.time()
                     alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                   solver_args=optimization_config["solver_args"])
-                    CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
+                    CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
                     # print(alpha_sol, p_sol)
                     print(CBF)
                     alpha_sol.backward()
@@ -488,8 +488,8 @@ def main():
                         d_hat_cbf = d_hat_dob
                     else:
                         d_hat_cbf = np.zeros(2*num_points, dtype=np.float32)
-                    lb_CBF = -CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
-                            - grad_CBF_disturbance @ d_hat_cbf
+                    lb_CBF = [-CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
+                            - grad_CBF_disturbance @ d_hat_cbf]
                     H = np.eye(6)
                     g = -speeds_in_cam_desired
 
@@ -532,7 +532,7 @@ def main():
                         time1 = time.time()
                         alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
                                                     solver_args=optimization_config["solver_args"])
-                        CBF = alpha_sol.detach().numpy() - CBF_config["scaling_lb"]
+                        CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
                         # print(alpha_sol, p_sol)
                         print(CBF)
                         alpha_sol.backward()

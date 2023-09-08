@@ -42,20 +42,20 @@ class DifferentiableCollisionCBF():
         self.collision_cbf_qp.settings.max_iter = 20
 
         self.frame_names = [
-            "LINK3",
-            "LINK4",
-            "LINK5_1",
-            "LINK5_2",
-            "LINK6",
-            "LINK7",
-            "HAND",
+            "LINK3_BB",
+            "LINK4_BB",
+            "LINK5_1_BB",
+            "LINK5_2_BB",
+            "LINK6_BB",
+            "LINK7_BB",
+            "HAND_BB",
         ]
 
     def filter_dq(self, dq_ref, info):
         # update link position and oriention in DifferentiableCollisions
-        rs, qs = compute_rs_qs(info)
+        rs, qs_w_first = compute_rs_qs(info, self.frame_names)
         # compute α's and J's
-        _alphas, Js = self.get_alpha_and_grad(rs, qs)
+        _alphas, Js = self.get_alpha_and_grad(rs, qs_w_first)
         # compute α's and J's
         alphas = []
         Cs = []

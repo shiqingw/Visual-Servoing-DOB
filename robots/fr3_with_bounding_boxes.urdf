@@ -119,6 +119,29 @@
     <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.4937" soft_upper_limit="2.4937"/>
     <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
   </joint>
+
+  <link name="fr3_link3_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link3_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint3_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 -0.145"/>
+    <parent link="fr3_link3"/>
+    <child link="fr3_link3_bounding_box"/>
+  </joint>
   
   <link name="fr3_link4">
     <visual>
@@ -149,6 +172,29 @@
     <limit effort="87.0" lower="-2.7478" upper="-0.4461" velocity="1.25"/>
     <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.7478" soft_upper_limit="-0.4461"/>
     <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="fr3_link4_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link4_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint4_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <parent link="fr3_link4"/>
+    <child link="fr3_link4_bounding_box"/>
   </joint>
 
   <link name="fr3_link5">
@@ -182,6 +228,52 @@
     <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
   </joint>
 
+  <link name="fr3_link5_1_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link5_1_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint5_1_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 -0.26"/>
+    <parent link="fr3_link5"/>
+    <child link="fr3_link5_1_bounding_box"/>
+  </joint>
+
+  <link name="fr3_link5_2_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link5_2_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint5_2_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.08 -0.13"/>
+    <parent link="fr3_link5"/>
+    <child link="fr3_link5_2_bounding_box"/>
+  </joint>
+
   <link name="fr3_link6">
     <visual>
       <geometry>
@@ -211,6 +303,29 @@
     <limit effort="12.0" lower="0.8521" upper="4.2094" velocity="1.5"/>
     <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="0.8521" soft_upper_limit="4.2094"/>
     <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="fr3_link6_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link6_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint6_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.00 -0.03"/>
+    <parent link="fr3_link6"/>
+    <child link="fr3_link6_bounding_box"/>
   </joint>
   
   <link name="fr3_link7">
@@ -242,6 +357,29 @@
     <limit effort="12.0" lower="-2.6895" upper="2.6895" velocity="3.0"/>
     <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.6895" soft_upper_limit="2.6895"/>
     <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="fr3_link7_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://robots/meshes/visual/fr3_link7_ellipsoid.obj"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_joint7_bounding_box" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.00 0.01"/>
+    <parent link="fr3_link7"/>
+    <child link="fr3_link7_bounding_box"/>
   </joint>
 
   <link name="fr3_link8">
@@ -298,6 +436,29 @@
     <origin rpy="0 0 0" xyz="0 0 0.1034"/>
     <parent link="fr3_hand"/>
     <child link="fr3_hand_tcp"/>
+  </joint>
+
+  <link name="fr3_hand_bounding_box">
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.12"/>
+      </geometry>
+      <material name="cornflowerblue">
+        <color rgba="0.3921 0.5843 0.9294 0.5"/>
+      </material>
+    </visual> -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1e-10"/>
+      <inertia ixx="1e-10" ixy="0" ixz="0" iyy="1e-10" iyz="0" izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <joint name="fr3_hand_bounding_box_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.00 0.02"/>
+    <parent link="fr3_hand"/>
+    <child link="fr3_hand_bounding_box"/>
   </joint>
 
   <link name="fr3_leftfinger">
@@ -408,7 +569,7 @@
     <dynamics damping="0.3"/>
   </joint>
 
-  <link name="camera">
+  <link name="fr3_camera">
     <inertial>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <mass value="0.072"/>
@@ -428,7 +589,7 @@
   <joint name="fr3_hand_camera_joint" type="fixed">
     <origin xyz="0.05 0.0 0.05" rpy="0.0 0.0 1.57"/>
     <parent link="fr3_hand"/>
-    <child link="camera"/>
+    <child link="fr3_camera"/>
   </joint>
 </robot>
 
