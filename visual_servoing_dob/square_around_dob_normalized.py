@@ -492,10 +492,6 @@ def main():
                             - grad_CBF_disturbance @ d_hat_cbf]
                     H = np.eye(6)
                     g = -speeds_in_cam_desired
-
-                    cbf_qp.settings.initial_guess = (
-                        proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
-                    )
                     cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
                     cbf_qp.solve()
 
@@ -569,9 +565,6 @@ def main():
             H = np.eye(9)
             g = - dq_nominal
             C = np.eye(9)*dt*step_every
-            joint_limits_qp.settings.initial_guess = (
-                    proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
-                )
             joint_limits_qp.update(H=H, g=g, l=joint_lb - q, u=joint_ub - q, C=C)
             joint_limits_qp.solve()
             vel = joint_limits_qp.results.x

@@ -42,7 +42,7 @@ class FR3CameraSim(Env):
         p.loadURDF("plane.urdf")
 
         # Load Franka Research 3 Robot
-        model_name = "fr3_with_bounding_boxes"
+        model_name = "fr3_with_camera_and_bounding_boxes"
         package_directory = getDataPath()
         robot_URDF = package_directory + "/robots/{}.urdf".format(model_name)
         urdf_search_path = package_directory + "/robots"

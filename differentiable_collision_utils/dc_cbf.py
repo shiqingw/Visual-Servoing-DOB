@@ -74,9 +74,6 @@ class DifferentiableCollisionCBF():
         lb = -self.gamma * (np.array(alphas)[:, np.newaxis] - self.alpha_offset)
         C = np.concatenate(Cs, axis=0)
 
-        self.collision_cbf_qp.settings.initial_guess = (
-            proxsuite.proxqp.InitialGuess.WARM_START_WITH_PREVIOUS_RESULT
-        )
         self.collision_cbf_qp.update(H =2 * np.eye(9), g=-2 * dq_ref, C=C, l=lb)
         self.collision_cbf_qp.solve()
 
