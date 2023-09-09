@@ -1,17 +1,17 @@
 {
     "image_save_format": "png",
     "record": 0,
-    "save_screeshot": 0,
-    "save_rgb": 0,
+    "save_screeshot": 1,
+    "save_rgb": 1,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
-    "visualize_target_traj_from_last": 0,
-    "visualize_camera_traj_from_last": 0,
-    "zero_vel": 0,
-    "horizon": 3100,
+    "visualize_target_traj_from_last": 1,
+    "visualize_camera_traj_from_last": 1,
+    "zero_vel": 1,
+    "horizon": 31000,
     "wait_ekf": 0,
     "step_every": 8,
     "save_every": 24,
@@ -24,7 +24,7 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "square1.urdf",
+        "obs_urdf": "square.urdf",
         "cameraDistance": 1.4,
         "cameraYaw": 0.0,
         "cameraPitch": -48.0,
@@ -59,7 +59,7 @@
         "apriltag_radius": 0.12,
         "initial_position": [0.39, 0.0, 0.005],
         "center_position": [0.51, 0.0, 0.005],
-        "augular_velocity": 0.5,
+        "augular_velocity": 0,
         "offset_angle": 3.14
     },
 
@@ -93,7 +93,7 @@
     },
 
     "CBF_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,
@@ -103,7 +103,7 @@
     },
 
     "collision_cbf_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "barrier_gamma": 5,
         "alpha_offset": 1.03

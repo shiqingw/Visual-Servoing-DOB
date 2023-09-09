@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     for i in range(len(exp_names)):
         exp_name = exp_names[i]
-        results_dir = "{}/results_dob/".format(str(Path(__file__).parent.parent)) + exp_name
+        results_dir = "{}/results_collision_dob/".format(str(Path(__file__).parent.parent)) + exp_name
         summary = load_dict("{}/summary.npy".format(results_dir))
         times = summary["times"]
         stop_ind = summary["stop_ind"]
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     plt.grid()
     plt.tight_layout()
     plt.draw()
-    results_dir = "{}/results_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), 0)
+    results_dir = "{}/results_collision_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), 0)
     name = " ".join(str(x) for x in exp_names)
     name = name.replace(" ", "_")
     plt.savefig(os.path.join(results_dir, name + '.png'))
