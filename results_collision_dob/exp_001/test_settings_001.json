@@ -8,10 +8,10 @@
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
-    "visualize_target_traj_from_last": 1,
-    "visualize_camera_traj_from_last": 1,
-    "zero_vel": 1,
-    "horizon": 30000,
+    "visualize_target_traj_from_last": 0,
+    "visualize_camera_traj_from_last": 0,
+    "zero_vel": 0,
+    "horizon": 3000,
     "wait_ekf": 0,
     "step_every": 8,
     "save_every": 24,
@@ -58,7 +58,7 @@
         "apriltag_radius": 0.15,
         "initial_position": [0.7, 0.0, 0.005],
         "center_position": [0.85, 0.0, 0.005],
-        "augular_velocity": 0,
+        "augular_velocity": 0.5,
         "offset_angle": 3.14
     },
 

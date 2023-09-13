@@ -10,8 +10,8 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    # exp_names = ['exp_001_w_cbf','exp_001_wo_cbf']
-    exp_names = ['exp_002_w_cbf','exp_002_wo_cbf']
+    exp_names = ['exp_001_w_cbf','exp_001_wo_cbf']
+    # exp_names = ['exp_002_w_cbf','exp_002_wo_cbf']
     labels = ['w/ CBF', 'w/o CBF']
     linestyles = ['-', '--']
     label_fs = 35
@@ -36,7 +36,7 @@ if __name__ == '__main__':
                 linewidth = linewidth, label="$h$" + " ("+labels[i]+")")
 
 
-    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted', linewidth = linewidth)
     plt.legend(fontsize = legend_fs)
     plt.xlabel('Time (s)', fontsize=label_fs)
     plt.ylabel('$h$ values', fontsize=label_fs)

@@ -102,7 +102,7 @@
     },
 
     "collision_cbf_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "barrier_gamma": 5,
         "alpha_offset": 1.03
