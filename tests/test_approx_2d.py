@@ -42,7 +42,7 @@ plt.ylim(-2,7)
 plt.gca().set_aspect('equal')
 plt.grid()
 plt.tight_layout()
-plt.savefig("triangle_keq{}.png".format(kappa))
+plt.savefig("triangle_keq{}.pdf".format(kappa))
 
 ############################################################################################################
 

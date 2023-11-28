@@ -1,6 +1,6 @@
 {
     "image_save_format": "png",
-    "record": 0,
+    "record": 1,
     "save_screeshot": 0,
     "save_rgb": 0,
     "save_depth": 0,
