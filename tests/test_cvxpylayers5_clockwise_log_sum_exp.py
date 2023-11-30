@@ -15,7 +15,8 @@ nc1 = 4
 nc2 = 4
 kappa = 1e-5
 eps = 0.1
-solver_args={"solve_method": "SCS"}
+# solver_args={"solve_method": "SCS"}
+solver_args={"solve_method": "ECOS"}
 
 _p = cp.Variable(nv)
 _alpha = cp.Variable(1, pos=True)

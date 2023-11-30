@@ -24,8 +24,8 @@ circle_center = np.array([5,0], dtype=np.float64)
 dist = 10
 plot_x_lim = [-10,30]
 plot_y_lim = [-10,10]
-# solver_args={"solve_method": "SCS", "eps": 1e-7, "max_iters": 2000}
-solver_args={"solve_method": "ECOS", "max_iters": 1000} # Cannot use eps for ECOS
+solver_args={"solve_method": "SCS", "eps": 1e-7, "max_iters": 2000}
+# solver_args={"solve_method": "ECOS", "max_iters": 1000} # Cannot use eps for ECOS
 
 ############################################################################################################
 # Solve problem
