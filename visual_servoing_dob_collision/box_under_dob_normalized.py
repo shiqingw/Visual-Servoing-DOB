@@ -1,12 +1,12 @@
 import time
 from sys import platform
-if platform == "darwin":
-    print("==> Initializing Julia")
-    time1 = time.time()
-    from julia.api import Julia
-    jl = Julia(compiled_modules=False)
-    time2 = time.time()
-    print("==> Initializing Julia took {} seconds".format(time2-time1))
+# if platform == "darwin":
+#     print("==> Initializing Julia")
+#     time1 = time.time()
+#     from julia.api import Julia
+#     jl = Julia(compiled_modules=False)
+#     time2 = time.time()
+#     print("==> Initializing Julia took {} seconds".format(time2-time1))
 import argparse
 import json
 import os
@@ -37,14 +37,14 @@ from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
 from ekf.ekf_ibvs_normalized import EKF_IBVS
 
-try:
-    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
-except:
-    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
+# try:
+#     from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
+# except:
+#     from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=3, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
