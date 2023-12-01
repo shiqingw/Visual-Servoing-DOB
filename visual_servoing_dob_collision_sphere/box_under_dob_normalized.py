@@ -35,6 +35,7 @@ from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_t
 from all_utils.vs_utils import one_point_depth_jacobian_normalized, normalize_one_image_point, normalize_corners
 from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
+from all_utils.cbf_utils import SphereProjectedCBF
 from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 # try:
@@ -150,8 +151,6 @@ def main():
     manipulability = np.zeros(num_data, dtype = np.float32)
     vels = np.zeros((num_data,9), dtype = np.float32)
     joint_values = np.zeros((num_data,9), dtype = np.float32)
-    cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
-    cbf_value = np.zeros(num_data, dtype = np.float32)
     target_center = np.zeros((num_data,3), dtype = np.float32)
     camera_position = np.zeros((num_data,3), dtype = np.float32)
     ekf_estimates = np.zeros((num_data,4,9), dtype = np.float32)
@@ -179,6 +178,18 @@ def main():
     p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
+    # Sphere obstacles
+    sphere_center_in_world = np.zeros((3,4))
+    sphere_center_in_world[0,:] = np.mean(obstacle_corner_in_world, axis=0)
+    sphere_center_in_world[1,:] = sphere_center_in_world[0,:] + np.array([0,0.2,0,0])
+    sphere_center_in_world[2,:] = sphere_center_in_world[0,:] + np.array([0,-0.2,0,0])
+    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+    p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
+    radius = np.array([obstacle_config["radius"]]*len(sphere_center_in_world), dtype=np.float32)
+    CBFs = []
+    for i in range(len(sphere_center_in_world)):
+        CBFs.append(SphereProjectedCBF(radius[i]))
+
     # Initialize differentiable collision
     if collision_cbf_config["active"] == 1: 
         polygon_b_in_body = np.array([0.1, 0.3, 0.00025, 0.1, 0.3, 0.00025])
@@ -191,16 +202,10 @@ def main():
         time2 = time.time()
         print("==> Initializing differentiable collision (Julia) took {} seconds".format(time2-time1))
 
-    # Differentiable optimization layer
-    nv = 2
-    nc_target = optimization_config["n_cons_target"]
-    nc_obstacle = optimization_config["n_cons_obstacle"]
-    kappa = optimization_config["exp_coef"]
-    cvxpylayer = init_cvxpylayer(nv, nc_target, nc_obstacle, kappa)
-
     # Proxsuite for CBF-QP
-    n, n_eq, n_in = 6, 0, 1
+    n, n_eq, n_in = 6, 0, len(sphere_center_in_world)*4
     cbf_qp = init_prosuite_qp(n, n_eq, n_in)
+    cbf_values = np.zeros((num_data, len(sphere_center_in_world)*4), dtype = np.float32)
 
     # Proxsuite for inverse kinematics with joint limits
     n, n_eq, n_in = 9, 0, 9
@@ -459,111 +464,61 @@ def main():
             obstacle_corner_depths = obstacle_corner_in_cam[:,2]
             obstacle_corners_normalized = obstacle_corner_in_cam[:,0:2]/obstacle_corner_in_cam[:,2][:,np.newaxis]
 
+            # Map sphere centers to image
+            sphere_center_in_cam = sphere_center_in_world @ LA.inv(H).T
+            sphere_center_depths = sphere_center_in_cam[:,2]
+            sphere_centers_normalized = sphere_center_in_cam[:,0:2]/sphere_center_in_cam[:,2][:,np.newaxis]
+
+            if ekf_config["active_for_cbf"] == 1:
+                d_hat_cbf = d_hat_ekf
+            elif observer_config["active_for_cbf"] == 1:
+                d_hat_cbf = d_hat_dob
+            else:
+                d_hat_cbf = np.zeros(2*num_points, dtype=np.float32)
+
             if CBF_config["active"] == 1:
                 # Construct CBF and its constraint
-                target_coords = torch.tensor(corners_raw_normalized, dtype=torch.float32, requires_grad=True)
-                x_target = target_coords[:,0]
-                y_target = target_coords[:,1]
-                A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
-                b_target_val = -y_target*torch.roll(x_target,-1) + torch.roll(y_target,-1)*x_target
 
-                obstacle_coords = torch.tensor(obstacle_corners_normalized, dtype=torch.float32, requires_grad=True)
-                x_obstacle = obstacle_coords[:,0]
-                y_obstacle = obstacle_coords[:,1]
-                A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
-                b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
+                A_CBF = np.zeros((len(sphere_center_in_world)*4, 6), dtype=np.float32)
+                lb_CBF = np.zeros(len(sphere_center_in_world)*4, dtype=np.float32)
+                cbf_counter = 0
+                all_cbf_values = np.zeros(len(sphere_center_in_world)*4, dtype=np.float32)
+                for kk in range(len(sphere_center_in_world)):
+                    cbf = CBFs[kk]
+                    sphere_center_normalized = sphere_centers_normalized[kk,:]
+                    sphere_center_depth = sphere_center_depths[kk]
+                    h_values = cbf.evaluate(corners_raw_normalized[:,0], corners_raw_normalized[:,1], sphere_center_normalized[0],
+                                            sphere_center_normalized[1], sphere_center_depth)
+                    grad_h = cbf.evaluate_gradient(corners_raw_normalized[:,0], corners_raw_normalized[:,1], sphere_center_normalized[0],
+                                            sphere_center_normalized[1], sphere_center_depth)
+                    all_cbf_values[kk*4:kk*4+4] = h_values
 
-                # check if the obstacle is far to avoid numerical instability
-                A_obstacle_np = A_obstacle_val.detach().numpy()
-                b_obstacle_np = b_obstacle_val.detach().numpy()
-                tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
-                tmp = np.max(tmp, axis=1)
-                print(tmp)
-     
-                if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
-                    time1 = time.time()
-                    alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
-                                                  solver_args=optimization_config["solver_args"])
-                    CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
-                    # print(alpha_sol, p_sol)
-                    print(CBF)
-                    alpha_sol.backward()
-                    time2 = time.time()
-                    cvxpylayer_computation_time[i//step_every] = time2-time1
-                    cbf_value[i//step_every] = CBF
+                    for ii in range(len(h_values)):
+                        actuation_matrix = np.zeros((5,6), dtype=np.float32)
+                        actuation_matrix[0:2,:] = J_image_cam_ekf[2*ii:2*ii+2,:]
+                        actuation_matrix[2:4,:] = one_point_image_jacobian_normalized(sphere_center_normalized[0],sphere_center_normalized[1], sphere_center_depth)
+                        actuation_matrix[4,:] = one_point_depth_jacobian_normalized(sphere_center_normalized[0],sphere_center_normalized[1], sphere_center_depth)
+                        A_CBF[cbf_counter,:] = grad_h[ii,:] @ actuation_matrix
+                        grad_CBF_disturbance = grad_h[ii,0:2]
+                        lb_CBF[cbf_counter] = -CBF_config["barrier_alpha"]*h_values[ii] + CBF_config["compensation"] - grad_CBF_disturbance @ d_hat_cbf[2*ii:2*ii+2]
+                        cbf_counter += 1
+                print(A_CBF)
+                print(lb_CBF)
 
-                    target_coords_grad = np.array(target_coords.grad)
-                    obstacle_coords_grad = np.array(obstacle_coords.grad)
-                    grad_CBF = np.hstack((target_coords_grad.reshape(-1), obstacle_coords_grad.reshape(-1)))
-                    grad_CBF_disturbance = target_coords_grad.reshape(-1)
+                H = np.eye(6)
+                g = -speeds_in_cam_desired
+                cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
+                cbf_qp.solve()
 
-                    actuation_matrix = np.zeros((len(grad_CBF), 6), dtype=np.float32)
-                    actuation_matrix[0:2*len(target_coords_grad)] = J_image_cam_ekf
-                    for ii in range(len(obstacle_coords_grad)):
-                        x, y = obstacle_corners_normalized[ii,:]
-                        Z = obstacle_corner_depths[ii]
-                        actuation_matrix[2*ii+2*len(target_coords_grad):2*ii+2+2*len(target_coords_grad)] = one_point_image_jacobian_normalized(x,y,Z)
-                    
-                    # CBF_QP
-                    A_CBF = (grad_CBF @ actuation_matrix)[np.newaxis, :]
-                    if ekf_config["active_for_cbf"] == 1:
-                        d_hat_cbf = d_hat_ekf
-                    elif observer_config["active_for_cbf"] == 1:
-                        d_hat_cbf = d_hat_dob
-                    else:
-                        d_hat_cbf = np.zeros(2*num_points, dtype=np.float32)
-                    lb_CBF = [-CBF_config["barrier_alpha"]*CBF + CBF_config["compensation"]\
-                            - grad_CBF_disturbance @ d_hat_cbf]
-                    H = np.eye(6)
-                    g = -speeds_in_cam_desired
-                    cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
-                    cbf_qp.solve()
+                speeds_in_cam = cbf_qp.results.x
 
-                    speeds_in_cam = cbf_qp.results.x
-                else: 
-                    speeds_in_cam = speeds_in_cam_desired
-                    print("CBF skipped")
-                    cvxpylayer_computation_time[i//step_every] = None
-                    cbf_value[i//step_every] = None
             else: 
                 speeds_in_cam = speeds_in_cam_desired
-                if CBF_config["cbf_value_record"] == 1:
-                    # Construct CBF and its constraint
-                    target_coords = torch.tensor(corners_raw_normalized, dtype=torch.float32, requires_grad=True)
-                    x_target = target_coords[:,0]
-                    y_target = target_coords[:,1]
-                    A_target_val = torch.vstack((-y_target+torch.roll(y_target,-1), -torch.roll(x_target,-1)+x_target)).T
-                    b_target_val = -y_target*torch.roll(x_target,-1) + torch.roll(y_target,-1)*x_target
-
-                    obstacle_coords = torch.tensor(obstacle_corners_normalized, dtype=torch.float32, requires_grad=True)
-                    x_obstacle = obstacle_coords[:,0]
-                    y_obstacle = obstacle_coords[:,1]
-                    A_obstacle_val = torch.vstack((-y_obstacle+torch.roll(y_obstacle,-1), -torch.roll(x_obstacle,-1)+x_obstacle)).T
-                    b_obstacle_val = -y_obstacle*torch.roll(x_obstacle,-1) + torch.roll(y_obstacle,-1)*x_obstacle
-
-                    # check if the obstacle is far to avoid numerical instability
-                    A_obstacle_np = A_obstacle_val.detach().numpy()
-                    b_obstacle_np = b_obstacle_val.detach().numpy()
-                    tmp = kappa*(corners_raw_normalized @ A_obstacle_np.T - b_obstacle_np)
-                    tmp = np.max(tmp, axis=1)
-
-                    if np.min(tmp) <= CBF_config["threshold_lb"] and np.max(tmp) <= CBF_config["threshold_ub"]:
-                        time1 = time.time()
-                        alpha_sol, p_sol = cvxpylayer(A_target_val, b_target_val, A_obstacle_val, b_obstacle_val, 
-                                                    solver_args=optimization_config["solver_args"])
-                        CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
-                        # print(alpha_sol, p_sol)
-                        print(CBF)
-                        alpha_sol.backward()
-                        time2 = time.time()
-                        cvxpylayer_computation_time[i//step_every] = time2-time1
-                        cbf_value[i//step_every] = CBF
-                    else:
-                        print("CBF value skipped")
-                        cvxpylayer_computation_time[i//step_every] = None
-                        cbf_value[i//step_every] = None
-
-            # print(speeds_in_cam)
+            if CBF_config["cbf_value_record"] == 1:
+                cbf_values[i//step_every,:] = all_cbf_values
+            print(speeds_in_cam_desired)
+            print(speeds_in_cam)
+            print("################")
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]
             omega_in_cam = speeds_in_cam[3:6]
@@ -623,36 +578,40 @@ def main():
                 obstacle_corner_in_image = obstacle_corner_in_cam[:,0:3] @ intrinsic_matrix.T
                 obstacle_corner_in_image = obstacle_corner_in_image/obstacle_corner_in_image[:,-1][:,np.newaxis]
                 obstacle_corner_in_image = obstacle_corner_in_image[:,0:2]
+
+                sphere_center_in_image = sphere_center_in_cam[:,0:3] @ intrinsic_matrix.T
+                sphere_center_in_image = sphere_center_in_image/sphere_center_in_image[:,-1][:,np.newaxis]
+                sphere_center_in_image = sphere_center_in_image[:,0:2]
+
                 for ii in range(len(corners_raw)):
                     x, y = corners_raw[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
                 for ii in range(len(obstacle_corner_in_image)):
                     x, y = obstacle_corner_in_image[ii,:]
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
-
-                x, y = p_sol.detach().numpy()
-                img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
+                for ii in range(len(sphere_center_in_image)):
+                    x, y = sphere_center_in_image[ii,:]
+                    img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
                 
             if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
                 blank_img = np.ones_like(img)*255
 
-                A_target_val = A_target_val.detach().numpy()
-                b_target_val = b_target_val.detach().numpy()
-                A_obstacle_val = A_obstacle_val.detach().numpy()
-                b_obstacle_val = b_obstacle_val.detach().numpy()
-
                 for ii in range(camera_config["width"]):
                     for jj in range(camera_config["height"]):
                         pp = np.array(normalize_one_image_point(ii,jj,fx,fy,cx,cy))
-                        if np.sum(np.exp(kappa * (A_target_val @ pp - b_target_val))) <= 4:
-                            x, y = ii, jj
-                            img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
-                        if np.sum(np.exp(kappa * (A_obstacle_val @ pp - b_obstacle_val))) <= 4:
-                            x, y = ii, jj
-                            img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
-                cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
+                        for kk in range(len(CBFs)):
+                            cbf = CBFs[kk]
+                            sphere_center_normalized = sphere_centers_normalized[kk,:]
+                            sphere_center_depth = sphere_center_depths[kk]
+                            h_values = cbf.evaluate(pp[0], pp[1], sphere_center_normalized[0],
+                                            sphere_center_normalized[1], sphere_center_depth)
+                            if h_values <= 0:
+                                x, y = ii, jj
+                                blank_img = cv2.circle(blank_img, (int(x),int(y)), radius=1, color=(0, 0, 255), thickness=-1)
+  
+                cv2.imwrite(results_dir+'/scaling_functions_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), blank_img)
                 
             # Step the simulation
             if test_settings["zero_vel"] == 1 or i< wait_ekf:
@@ -705,8 +664,7 @@ def main():
             'manipulability': manipulability,
             'joint_vels': vels,
             'joint_values': joint_values,
-            'cvxpylayer_computation_time': cvxpylayer_computation_time,
-            'cbf_value': cbf_value,
+            'cbf_values': cbf_values,
             'stop_ind': i//step_every,
             'target_center': target_center,
             'camera_position': camera_position,
@@ -757,15 +715,9 @@ def main():
     plt.savefig(os.path.join(results_dir, 'plot_manipulability.png'))
     plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, cvxpylayer_computation_time, label="cvxpylayer_computation_time")
-    plt.legend()
-    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'cvxpylayer_computation_time.png'))
-    plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
-    plt.plot(times, cbf_value, label="cbf_value")
+    plt.plot(times, cbf_values, label="cbf_value")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
     plt.savefig(os.path.join(results_dir, 'cbf_value.png'))

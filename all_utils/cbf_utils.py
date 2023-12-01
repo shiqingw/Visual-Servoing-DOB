@@ -1,26 +1,25 @@
 import numpy as np
-from sympy import Matrix, cos, diff, lambdify, simplify, sin, symbols
+from sympy import Matrix, lambdify, simplify, symbols
 
-class Sphere_Projected_CBF(object):
+class SphereProjectedCBF(object):
     """This class builds a CBF for a sphere projected on a plane. The perspective projection of a 
         sphere on a plane is an ellipse. The CBF is built based on the following derivation:
         https://math.stackexchange.com/questions/1367710/perspective-projection-of-a-sphere-on-a-plane
     """
 
-    def __init__(self, f, r):   
+    def __init__(self, r):   
         """Initialize the CBF for a sphere projected on a plane.
 
         Args:
             f (float): focal length
             r (float): radius of the sphere
         """
-        self.f = f
         self.r = r
         x, y, x0, y0, Zc = symbols('x y x0 y0 Zc')
         Q = Matrix([[y0**2 + 1 - self.r**2/Zc**2, -x0*y0],
                     [-x0*y0, x0**2 + 1 - self.r**2/Zc**2]])
-        q = Matrix([-2*x0*self.f, -2*y0*self.f])
-        c = Matrix([[self.f**2 * (x0**2 + y0**2 - self.r**2/Zc**2)]])
+        q = Matrix([-2*x0, -2*y0])
+        c = Matrix([[x0**2 + y0**2 - self.r**2/Zc**2]])
         p = Matrix([x,y])
         h = simplify(p.T @ Q @ p + q.T @ p + c)
         self.h = lambdify([x, y, x0, y0, Zc], h, "numpy")

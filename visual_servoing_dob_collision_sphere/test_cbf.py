@@ -2,9 +2,9 @@ import numpy as np
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from all_utils.cbf_utils import Sphere_Projected_CBF
+from all_utils.cbf_utils import SphereProjectedCBF
 
-cbf = Sphere_Projected_CBF(f=2, r=1)
+cbf = SphereProjectedCBF(r=1)
 print(cbf.evaluate(x=2/np.sqrt(3), y=0, x0=0, y0=0, Zc=2))
 print(cbf.evaluate_gradient(x=2/np.sqrt(3), y=0, x0=0, y0=0, Zc=2))
 

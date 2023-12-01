@@ -9,6 +9,10 @@
     <color rgba="0.6 0.6 0.6 1."/>
   </material>
 
+  <material name="orangered">
+    <color rgba="1 0.34 0.2 0.1"/>
+  </material>
+
   <link name="link1">
     <inertial>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -77,9 +81,7 @@
       <geometry>
         <sphere radius="0.15"/>
       </geometry>
-      <material name="orangered">
-        <color rgba="1 0.34 0.2 0.1"/>
-      </material>
+      <material name="orangered"/>
     </visual>
 
     <visual>
@@ -87,9 +89,7 @@
       <geometry>
         <sphere radius="0.15"/>
       </geometry>
-      <material name="orangered">
-        <color rgba="1 0.34 0.2 0.1"/>
-      </material>
+      <material name="orangered"/>
     </visual>
 
     <visual>
@@ -97,9 +97,7 @@
       <geometry>
         <sphere radius="0.15"/>
       </geometry>
-      <material name="orangered">
-        <color rgba="1 0.34 0.2 0.1"/>
-      </material>
+      <material name="orangered"/>
     </visual>
   </link>
 

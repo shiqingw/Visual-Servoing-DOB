@@ -2,10 +2,10 @@
     "image_save_format": "png",
     "record": 0,
     "save_screeshot": 0,
-    "save_rgb": 0,
+    "save_rgb": 1,
     "save_depth": 0,
-    "save_detection": 0,
-    "save_scaling_function": 0,
+    "save_detection": 1,
+    "save_scaling_function": 1,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
     "visualize_target_traj_from_last": 0,
@@ -68,7 +68,8 @@
         "lineColorRGB" : [0.0, 0.0, 1.0],
         "lineWidth" : 10,
         "lifeTime" : 0,
-        "obstacle_alpha": 1
+        "obstacle_alpha": 1,
+        "radius": 0.15
     },
 
     "controller_config":{
