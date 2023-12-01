@@ -93,6 +93,7 @@ def main():
     # Create and reset simulation
     enable_gui_camera_data = simulator_config["enable_gui_camera_data"]
     obs_urdf = simulator_config["obs_urdf"]
+    apriltag_urdf = simulator_config["apriltag_urdf"]
     cameraDistance = simulator_config["cameraDistance"]
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
@@ -109,7 +110,7 @@ def main():
                            render_mode="human", record_path=None, crude_type = crude_type)
         
     obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
-    april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
+    april_tag_ID = p.loadURDF(apriltag_urdf, useFixedBase=True)
     box_base = p.loadURDF("box_base.urdf", useFixedBase=True)
  
     info = env.reset(cameraDistance = cameraDistance,
@@ -186,6 +187,10 @@ def main():
 
     # Sphere obstacles
     sphere_center_in_world = np.array(obstacle_config["sphere_center"], dtype=np.float32)
+    if "rotate_by" in obstacle_config:
+        theta = obstacle_config["rotate_by"]
+        r = R.from_euler('z', theta, degrees=False)
+        sphere_center_in_world[:,0:3] = sphere_center_in_world[:,0:3] @ r.as_matrix().T
     sphere_center_in_world = sphere_center_in_world + obstacle_pos
     sphere_center_in_world = np.hstack((sphere_center_in_world, np.ones((sphere_center_in_world.shape[0],1), dtype=np.float32)))
     colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*3

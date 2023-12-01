@@ -1,8 +1,8 @@
 {
     "image_save_format": "png",
     "record": 0,
-    "save_screeshot": 0,
-    "save_rgb": 0,
+    "save_screeshot": 1,
+    "save_rgb": 1,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
@@ -25,6 +25,7 @@
     "simulator_config":{
         "enable_gui_camera_data": 0,
         "obs_urdf": "square_45deg.urdf",
+        "apriltag_urdf": "apriltag_id0_square_big.urdf",
         "cameraDistance": 1.4,
         "cameraYaw": 0.0,
         "cameraPitch": -48.0,
@@ -55,7 +56,7 @@
     },
 
     "apriltag_config":{
-        "tag_size": 0.135,
+        "tag_size": 0.1485,
         "apriltag_radius": 0.12,
         "initial_position": [0.39, 0.0, 0.005],
         "center_position": [0.51, 0.0, 0.005],
