@@ -34,7 +34,6 @@ from configuration import Configuration
 from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
 from all_utils.vs_utils import one_point_depth_jacobian_normalized, normalize_one_image_point, normalize_corners
 from all_utils.proxsuite_utils import init_prosuite_qp
-from all_utils.cvxpylayers_utils import init_cvxpylayer
 from all_utils.cbf_utils import SphereProjectedCBF
 from ekf.ekf_ibvs_normalized import EKF_IBVS
 
@@ -494,9 +493,8 @@ def main():
                 speeds_in_cam = speeds_in_cam_desired
             if CBF_config["cbf_value_record"] == 1:
                 cbf_values[i//step_every,:] = all_cbf_values
-            print(speeds_in_cam_desired)
-            print(speeds_in_cam)
-            print("################")
+            print(np.min(all_cbf_values))
+            
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]
             omega_in_cam = speeds_in_cam[3:6]

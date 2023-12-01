@@ -1,0 +1,50 @@
+<?xml version="1.0" ?>
+<robot name="box">
+
+  <material name="panda_white">
+    <color rgba="1. 0.87 0.68 1."/>
+  </material>
+
+  <material name="metal">
+    <color rgba="0.6 0.6 0.6 1."/>
+  </material>
+
+  <link name="link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+       <mass value=".0"/>
+       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="0 0 0.78539816339" xyz="0 0 0.3"/>
+      <geometry>
+        <box size="0.10 0.10 0.005"/>
+      </geometry>
+      <material name="panda_white"/>
+    </visual>
+  </link>
+
+  <link name="link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+       <mass value=".0"/>
+       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.15"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.3"/>
+      </geometry>
+      <material name="metal"/>
+    </visual>
+  </link>
+
+  <joint name="fixed_joint" type="fixed">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>

@@ -48,6 +48,11 @@ def normalize_one_image_point(x, y, fx, fy, cx, cy):
     y_norm = (y - cy) / fy
     return x_norm, y_norm
 
+def denormalize_one_image_point(x_norm, y_norm, fx, fy, cx, cy):
+    x = x_norm * fx + cx
+    y = y_norm * fy + cy
+    return x, y
+
 def normalize_corners(corners, fx, fy, cx, cy):
     """
     corners: 2D array of shape (N, 2)

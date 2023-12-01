@@ -1,12 +1,12 @@
 import time
 from sys import platform
-if platform == "darwin":
-    print("==> Initializing Julia")
-    time1 = time.time()
-    from julia.api import Julia
-    jl = Julia(compiled_modules=False)
-    time2 = time.time()
-    print("==> Initializing Julia took {} seconds".format(time2-time1))
+# if platform == "darwin":
+#     print("==> Initializing Julia")
+#     time1 = time.time()
+#     from julia.api import Julia
+#     jl = Julia(compiled_modules=False)
+#     time2 = time.time()
+#     print("==> Initializing Julia took {} seconds".format(time2-time1))
 import argparse
 import json
 import os
@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import cv2
 import proxsuite
 import torch
+from scipy.spatial.transform import Rotation as R
 
 import sys
 from pathlib import Path
@@ -31,20 +32,20 @@ sys.path.append(str(Path(__file__).parent.parent))
 from fr3_envs.fr3_env_cam_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
-from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
+from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image, denormalize_one_image_point
 from all_utils.vs_utils import one_point_depth_jacobian_normalized, normalize_one_image_point, normalize_corners
 from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
 from ekf.ekf_ibvs_normalized import EKF_IBVS
 
-try:
-    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
-except:
-    from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
+# try:
+#     from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
+# except:
+#     from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=4, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -164,21 +165,22 @@ def main():
     corners_values = np.zeros((num_data,4,2), dtype = np.float32)
     depth_values = np.zeros((num_data,4), dtype = np.float32)
 
-    # Obstacle line
+    # Obstacle
     obstacle_config = test_settings["obstacle_config"]
-    # p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
-    #                    lineToXYZ = obstacle_config["lineToXYZ"],
-    #                    lineColorRGB = obstacle_config["lineColorRGB"],
-    #                    lineWidth = obstacle_config["lineWidth"],
-    #                    lifeTime = obstacle_config["lifeTime"])
-    obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.10,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.10,0,0]], dtype=np.float32)
+    obstacle_corner_in_world = np.array([[-1,-1],
+                                         [-1,1],
+                                         [1,1],
+                                         [1,-1]], dtype=np.float32)*obstacle_config["edge_length"]/2.0
+    obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.zeros((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
+    if "rotate_by" in obstacle_config:
+        theta = obstacle_config["rotate_by"]
+        r = R.from_euler('z', theta, degrees=False)
+        obstacle_corner_in_world[:,0:3] = obstacle_corner_in_world[:,0:3] @ r.as_matrix().T
+    obstacle_corner_in_world = obstacle_corner_in_world + np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
-    obstacle_pos = np.array([0.05,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
+    obstacle_pos =  np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
@@ -351,7 +353,7 @@ def main():
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw apritag vertices in world
+            # # Draw apritag vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world_true[:,0:3], colors, pointSize=1, lifeTime=0.01)
 
@@ -639,6 +641,7 @@ def main():
                     img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
                 x, y = p_sol.detach().numpy()
+                x, y = denormalize_one_image_point(x,y,fx,fy,cx,cy)
                 img = cv2.circle(img, (int(x),int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)

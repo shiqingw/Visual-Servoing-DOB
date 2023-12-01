@@ -1,8 +1,8 @@
 {
     "image_save_format": "png",
     "record": 0,
-    "save_screeshot": 1,
-    "save_rgb": 1,
+    "save_screeshot": 0,
+    "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
@@ -24,7 +24,7 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "square.urdf",
+        "obs_urdf": "square_45deg.urdf",
         "cameraDistance": 1.4,
         "cameraYaw": 0.0,
         "cameraPitch": -48.0,
@@ -66,7 +66,8 @@
     "obstacle_config":{
         "center_position": [0.51, 0.0, 0.30],
         "edge_length": 0.1,
-        "obstacle_alpha": 1
+        "obstacle_alpha": 1,
+        "rotate_by": 0.78539816339
     },
 
     "controller_config":{
@@ -86,11 +87,11 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 600,
-        "solver_args": {"eps": 1e-7, "max_iters": 2000}
+        "solver_args": {"solve_method": "ECOS"}
     },
 
     "CBF_config":{
-        "active": 0,
+        "active": 1,
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,
@@ -100,7 +101,7 @@
     },
 
     "collision_cbf_config":{
-        "active": 1,
+        "active": 0,
         "cbf_value_record": 1,
         "barrier_gamma": 5,
         "alpha_offset": 1.03

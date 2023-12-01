@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import cv2
 import proxsuite
 import torch
+from scipy.spatial.transform import Rotation as R
 
 import sys
 from pathlib import Path
@@ -31,12 +32,12 @@ sys.path.append(str(Path(__file__).parent.parent))
 from fr3_envs.fr3_env_cam_collision import FR3CameraSimCollision
 from utils.dict_utils import save_dict, load_dict
 from configuration import Configuration
-from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image
+from all_utils.vs_utils import one_point_image_jacobian_normalized, skew, skew_to_vector, point_in_image, denormalize_one_image_point
 from all_utils.vs_utils import one_point_depth_jacobian_normalized, normalize_one_image_point, normalize_corners
 from all_utils.proxsuite_utils import init_prosuite_qp
 from all_utils.cvxpylayers_utils import init_cvxpylayer
-from all_utils.cbf_utils import SphereProjectedCBF
 from ekf.ekf_ibvs_normalized import EKF_IBVS
+from all_utils.cbf_utils import SphereProjectedCBF
 
 # try:
 #     from differentiable_collision_utils.dc_cbf import DifferentiableCollisionCBF
@@ -45,7 +46,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=2, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -96,24 +97,28 @@ def main():
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
     lookat = simulator_config["lookat"]
+    robot_base_p_offset = simulator_config["robot_base_p_offset"]
     crude_type = simulator_config["crude_type"]
 
     if test_settings["record"] == 1:
-        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, render_mode="human",
-                                     record_path=os.path.join(results_dir, 'record.mp4'), crude_type=crude_type)
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_pos=robot_base_p_offset, 
+                           render_mode="human", record_path=os.path.join(results_dir, 'record.mp4'),
+                           crude_type = crude_type)
     else:
-        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, render_mode="human",
-                                     record_path=None, crude_type=crude_type)
-    
+        env = FR3CameraSimCollision(camera_config, enable_gui_camera_data, base_pos=robot_base_p_offset, 
+                           render_mode="human", record_path=None, crude_type = crude_type)
+        
     obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
     april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
-    
+    box_base = p.loadURDF("box_base.urdf", useFixedBase=True)
+ 
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,
                      cameraPitch = cameraPitch,
                      lookat = lookat,
                      target_joint_angles = test_settings["initial_joint_angles"])
     
+    # Pybullet GUI screenshot
     cameraDistance = screenshot_config["cameraDistance"]
     cameraYaw = screenshot_config["cameraYaw"]
     cameraPitch = screenshot_config["cameraPitch"]
@@ -159,41 +164,41 @@ def main():
     corners_values = np.zeros((num_data,4,2), dtype = np.float32)
     depth_values = np.zeros((num_data,4), dtype = np.float32)
 
-    # Obstacle line
+    # Obstacle
     obstacle_config = test_settings["obstacle_config"]
-    # p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
-    #                    lineToXYZ = obstacle_config["lineToXYZ"],
-    #                    lineColorRGB = obstacle_config["lineColorRGB"],
-    #                    lineWidth = obstacle_config["lineWidth"],
-    #                    lifeTime = obstacle_config["lifeTime"])
-    obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+    obstacle_corner_in_world = np.array([[-1,-1],
+                                         [-1,1],
+                                         [1,1],
+                                         [1,-1]], dtype=np.float32)*obstacle_config["edge_length"]/2.0
+    obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.zeros((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
+    if "rotate_by" in obstacle_config:
+        theta = obstacle_config["rotate_by"]
+        r = R.from_euler('z', theta, degrees=False)
+        obstacle_corner_in_world[:,0:3] = obstacle_corner_in_world[:,0:3] @ r.as_matrix().T
+    obstacle_corner_in_world = obstacle_corner_in_world + np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
-    obstacle_pos = np.array([0.1,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
+    obstacle_pos =  np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Sphere obstacles
-    sphere_center_in_world = np.zeros((3,4))
-    sphere_center_in_world[0,:] = np.mean(obstacle_corner_in_world, axis=0)
-    sphere_center_in_world[1,:] = sphere_center_in_world[0,:] + np.array([0,0.2,0,0])
-    sphere_center_in_world[2,:] = sphere_center_in_world[0,:] + np.array([0,-0.2,0,0])
-    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+    sphere_center_in_world = np.array(obstacle_config["sphere_center"], dtype=np.float32)
+    sphere_center_in_world = sphere_center_in_world + obstacle_pos
+    sphere_center_in_world = np.hstack((sphere_center_in_world, np.ones((sphere_center_in_world.shape[0],1), dtype=np.float32)))
+    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*3
     p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
     radius = np.array([obstacle_config["radius"]]*len(sphere_center_in_world), dtype=np.float32)
     CBFs = []
     for i in range(len(sphere_center_in_world)):
         CBFs.append(SphereProjectedCBF(radius[i]))
-
+    
     # Initialize differentiable collision
     if collision_cbf_config["active"] == 1: 
-        polygon_b_in_body = np.array([0.1, 0.3, 0.00025, 0.1, 0.3, 0.00025])
-        obstacle_r = obstacle_pos + np.array([0,0,0.25])
+        polygon_b_in_body = np.array([0.05, 0.05, 0.00025, 0.05, 0.05, 0.00025])
+        obstacle_r = obstacle_pos + np.array([0,0,0.3])
         obstacle_q = np.array([1.0,0,0,0])
         print("==> Initializing differentiable collision (Julia)")
         time1 = time.time()
@@ -201,6 +206,14 @@ def main():
         vel = collision_cbf.filter_dq(np.zeros(9), info)
         time2 = time.time()
         print("==> Initializing differentiable collision (Julia) took {} seconds".format(time2-time1))
+
+    # Proxsuite for model predictive control
+    n, n_eq, n_in = 6, 0, 0
+    mpc_qp = init_prosuite_qp(n, n_eq, n_in)
+    mpc_config = test_settings["mpc_config"]
+    Q_mpc = mpc_config["Q"]*np.eye(8)
+    R_mpc = mpc_config["R"]*np.eye(6)
+    F_mpc = mpc_config["F"]*np.eye(8)
 
     # Proxsuite for CBF-QP
     n, n_eq, n_in = 6, 0, len(sphere_center_in_world)*4
@@ -289,12 +302,6 @@ def main():
             detector = apriltag.Detector()
             result = detector.detect(img)
 
-            # Use cv2 window to display image
-            if enable_gui_camera_data == 0:
-                cv2.namedWindow("RGB")
-                BGR = cv2.cvtColor(rgb_opengl, cv2.COLOR_RGB2BGR)
-                cv2.imshow("RGB", BGR)
-
             # Break if no corner detected
             if len(result) == 0:
                 break
@@ -308,6 +315,12 @@ def main():
                 if_in[ii] = point_in_image(x, y, camera_config["width"], camera_config["height"])
             if np.sum(if_in) != len(corners_raw):
                 break
+            
+            # Use cv2 window to display image
+            if enable_gui_camera_data == 0:
+                cv2.namedWindow("RGB")
+                BGR = cv2.cvtColor(rgb_opengl, cv2.COLOR_RGB2BGR)
+                cv2.imshow("RGB", BGR)
 
             # Get depth
             depth_buffer_opengl = info["depth"]
@@ -352,11 +365,11 @@ def main():
             if test_settings["visualize_camera_traj"] == 1:
                 p.addUserDebugPoints(np.reshape(info["P_CAMERA"],(1,3)), [[0.,0.,1.]], pointSize=5, lifeTime=0.01)
 
-            # Draw apritag vertices in world
+            # # Draw apritag vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(coord_in_world_true[:,0:3], colors, pointSize=1, lifeTime=0.01)
 
-            # Draw obstacle vertices in world
+            # # Draw obstacle vertices in world
             # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
             # p.addUserDebugPoints(obstacle_corner_in_world[:,0:3], colors, pointSize=5, lifeTime=0.01)
 
@@ -403,60 +416,32 @@ def main():
             last_coord_in_world = coord_in_world_true
 
             # Compute desired pixel velocity (mean)
-            mean_gain = np.diag(controller_config["mean_gain"])
-            J_mean = 1/num_points*np.tile(np.eye(2), num_points)
             error_mean = np.mean(corners_raw_normalized[0:num_points,:], axis=0) - mean_target_normalized
-            xd_yd_mean = - LA.pinv(J_mean) @ mean_gain @ error_mean
 
             # Compute desired pixel velocity (variance)
-            variance_gain = np.diag(controller_config["variance_gain"])
-            J_variance = np.tile(- np.diag(np.mean(corners_raw_normalized[0:num_points,:], axis=0)), num_points)
-            J_variance[0,0::2] += corners_raw_normalized[0:num_points,0]
-            J_variance[1,1::2] += corners_raw_normalized[0:num_points,1]
-            J_variance = 2/num_points*J_variance
             error_variance = np.var(corners_raw_normalized[0:num_points,:], axis = 0) - variance_target_normalized
-            xd_yd_variance = - LA.pinv(J_variance) @ variance_gain @ error_variance
 
             # Compute desired pixel velocity (distance)
-            distance_gain = controller_config["distance_gain"]
             tmp = corners_raw_normalized - desired_corners_normalized
             error_distance = np.sum(tmp**2, axis=1)[0:num_points]
-            J_distance = np.zeros((num_points, 2*num_points), dtype=np.float32)
-            for ii in range(num_points):
-                J_distance[ii, 2*ii:2*ii+2] = tmp[ii,:]
-            J_distance = 2*J_distance
-            xd_yd_distance = - distance_gain * LA.pinv(J_distance) @ error_distance
 
             # Compute desired pixel velocity (position)
-            fix_position_gain = controller_config["fix_position_gain"]
             error_position = (corners_raw_normalized - desired_corners_normalized).reshape(-1)
-            J_position = np.eye(2*num_points, dtype=np.float32)
-            xd_yd_position = - fix_position_gain * LA.pinv(J_position) @ error_position
-
-            # Map to the camera speed expressed in the camera frame
-            # xd_yd_mean and xd_yd_variance does not interfere each other, see Gans TRO 2011
-            # null_mean = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_mean) @ J_mean
-            # null_position = np.eye(2*num_points, dtype=np.float32) - LA.pinv(J_position) @ J_position
-            # xd_yd = xd_yd_mean + xd_yd_variance + null_mean @ null_variance @ xd_yd_position
-            # xd_yd = xd_yd_position + null_position @ xd_yd_mean
-            # xd_yd = xd_yd_mean + null_mean @ xd_yd_position
-            xd_yd = xd_yd_position
-
-            J_active = J_image_cam_true[0:2*num_points]
+      
             if observer_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat_dob[0:2*num_points])
+                d_hat_mpc = d_hat_dob[0:2*num_points]
             elif ekf_config["active"] == 1:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ (xd_yd - d_hat_ekf[0:2*num_points])
+                d_hat_mpc = d_hat_ekf[0:2*num_points]
             else:
-                speeds_in_cam_desired = J_active.T @ LA.inv(J_active @ J_active.T + 0.1*np.eye(2*num_points)) @ xd_yd
+                d_hat_mpc = np.zeros(2*num_points, dtype=np.float32)
 
-            # J_active = J_image_cam_ekf[0:2*num_points]
-            # if observer_config["active"] == 1:
-            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_dob[0:2*num_points])/2
-            # elif ekf_config["active"] == 1:
-            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ (xd_yd - d_hat_ekf[0:2*num_points])/2
-            # else:
-            #     speeds_in_cam_desired = LA.pinv(J_active + J_image_cam_desired) @ xd_yd/2
+            error_current = (corners_raw_normalized - desired_corners_normalized).reshape(-1)
+            J_active = J_image_cam_true[0:2*num_points]
+            H_mpc_qp = R_mpc + J_active.T @ F_mpc @ J_active
+            g_mpc_qp = J_active.T @ F_mpc.T @ (error_current + d_hat_mpc)
+            mpc_qp.update(H=H_mpc_qp, g=g_mpc_qp)
+            mpc_qp.solve()
+            speeds_in_cam_desired = mpc_qp.results.x
 
             # print(speeds_in_cam_desired)
             # Map obstacle vertices to image
@@ -502,12 +487,10 @@ def main():
                         grad_CBF_disturbance = grad_h[ii,0:2]
                         lb_CBF[cbf_counter] = -CBF_config["barrier_alpha"]*h_values[ii] + CBF_config["compensation"] - grad_CBF_disturbance @ d_hat_cbf[2*ii:2*ii+2]
                         cbf_counter += 1
-                print(A_CBF)
-                print(lb_CBF)
 
-                H = np.eye(6)
-                g = -speeds_in_cam_desired
-                cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
+                H_cbf_qp = np.eye(6)
+                g_cbf_qp = -speeds_in_cam_desired
+                cbf_qp.update(H=H_cbf_qp, g=g_cbf_qp, C=A_CBF, l=lb_CBF)
                 cbf_qp.solve()
 
                 speeds_in_cam = cbf_qp.results.x
@@ -516,9 +499,9 @@ def main():
                 speeds_in_cam = speeds_in_cam_desired
             if CBF_config["cbf_value_record"] == 1:
                 cbf_values[i//step_every,:] = all_cbf_values
-            print(speeds_in_cam_desired)
-            print(speeds_in_cam)
-            print("################")
+            print(np.min(all_cbf_values))
+
+            # print(speeds_in_cam)
             # Transform the speed back to the world frame
             v_in_cam = speeds_in_cam[0:3]
             omega_in_cam = speeds_in_cam[3:6]
@@ -664,7 +647,7 @@ def main():
             'manipulability': manipulability,
             'joint_vels': vels,
             'joint_values': joint_values,
-            'cbf_values': cbf_values,
+            'cbf_value': cbf_values,
             'stop_ind': i//step_every,
             'target_center': target_center,
             'camera_position': camera_position,
@@ -714,7 +697,6 @@ def main():
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
     plt.savefig(os.path.join(results_dir, 'plot_manipulability.png'))
     plt.close(fig)
-
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
     plt.plot(times, cbf_values, label="cbf_value")
