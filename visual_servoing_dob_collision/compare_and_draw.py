@@ -10,8 +10,8 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    exp_names = ['exp_001_w_cbf','exp_001_wo_cbf']
-    # exp_names = ['exp_002_w_cbf','exp_002_wo_cbf']
+    exp_names = ['exp_003_w_cbf','exp_003_wo_cbf']
+    # exp_names = ['exp_004_w_cbf','exp_004_wo_cbf']
     labels = ['w/ CBF', 'w/o CBF']
     linestyles = ['-', '--']
     label_fs = 35
@@ -31,6 +31,8 @@ if __name__ == '__main__':
         times = summary["times"]
         stop_ind = summary["stop_ind"]
         cbf_value = summary["cbf_value"]
+        if "exp_004_wo_cbf" in exp_name:
+            stop_ind = 75
 
         plt.plot(times[:stop_ind], cbf_value[:stop_ind], linestyle = linestyles[i],
                 linewidth = linewidth, label="$h$" + " ("+labels[i]+")")
@@ -39,6 +41,7 @@ if __name__ == '__main__':
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted', linewidth = linewidth)
     plt.legend(fontsize = legend_fs)
     plt.xlabel('Time (s)', fontsize=label_fs)
+    plt.xlim([np.min(times)-0.5, np.max(times)+0.5])
     plt.ylabel('$h$ values', fontsize=label_fs)
     plt.xticks(fontsize = tick_fs)
     plt.yticks(fontsize = tick_fs)
@@ -48,5 +51,5 @@ if __name__ == '__main__':
     results_dir = "{}/results_collision_dob/exp_{:03d}".format(str(Path(__file__).parent.parent), 0)
     name = " ".join(str(x) for x in exp_names)
     name = name.replace(" ", "_")
-    plt.savefig(os.path.join(results_dir, name + '.png'))
+    plt.savefig(os.path.join(results_dir, name + '.pdf'))
     plt.close(fig)

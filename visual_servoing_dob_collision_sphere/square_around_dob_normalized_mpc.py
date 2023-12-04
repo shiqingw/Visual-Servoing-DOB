@@ -282,15 +282,17 @@ def main():
 
     # Display trajs from last
     if test_settings["visualize_target_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_collision_dob_sphere/exp_{:03d}_wo_spheres".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
         p.addUserDebugPoints(summary["target_center"], [[1.,0.,0.]]*len(summary["target_center"]), pointSize=5, lifeTime=0.01)
 
     if test_settings["visualize_camera_traj_from_last"] == 1:
-        results_dir_keep = "{}/results_dob/exp_{:03d}_w_cbf".format(str(Path(__file__).parent.parent), exp_num)
+        results_dir_keep = "{}/results_collision_dob_sphere/exp_{:03d}_wo_spheres".format(str(Path(__file__).parent.parent), exp_num)
         summary = load_dict("{}/summary.npy".format(results_dir_keep))
         p.addUserDebugPoints(summary["camera_position"], [[0.,0.,1.]]*len(summary["camera_position"]), pointSize=5, lifeTime=0.01)
-    
+        # wait for key press
+        input("Press Enter to continue...")
+        
     for i in range(T):
         augular_velocity = apriltag_config["augular_velocity"]
         apriltag_angle = augular_velocity*max(0,i-wait_ekf)*dt + apriltag_config["offset_angle"]
@@ -652,7 +654,7 @@ def main():
             'manipulability': manipulability,
             'joint_vels': vels,
             'joint_values': joint_values,
-            'cbf_value': cbf_values,
+            'cbf_values': cbf_values,
             'stop_ind': i//step_every,
             'target_center': target_center,
             'camera_position': camera_position,
