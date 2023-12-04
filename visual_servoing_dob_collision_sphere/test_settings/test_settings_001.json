@@ -1,5 +1,5 @@
 {
-    "image_save_format": "pdf",
+    "image_save_format": "png",
     "record": 0,
     "save_screeshot": 1,
     "save_rgb": 1,
@@ -24,7 +24,7 @@
 
     "simulator_config":{
         "enable_gui_camera_data": 0,
-        "obs_urdf": "box_small.urdf",
+        "obs_urdf": "box_small_with_12_spheres.urdf",
         "cameraDistance": 1.03,
         "cameraYaw": 0,
         "cameraPitch":-30,

@@ -10,7 +10,7 @@
   </material>
 
   <material name="orangered">
-    <color rgba="1 0.34 0.2 0.2"/>
+    <color rgba="1 0.34 0.2 0.5"/>
   </material>
 
   <link name="link1">

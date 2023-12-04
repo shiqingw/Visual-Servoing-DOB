@@ -183,7 +183,7 @@ def main():
     obstacle_pos =  np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
-    p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
+    # p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Sphere obstacles
     sphere_center_in_world = np.array(obstacle_config["sphere_center"], dtype=np.float32)
@@ -193,8 +193,8 @@ def main():
         sphere_center_in_world[:,0:3] = sphere_center_in_world[:,0:3] @ r.as_matrix().T
     sphere_center_in_world = sphere_center_in_world + obstacle_pos
     sphere_center_in_world = np.hstack((sphere_center_in_world, np.ones((sphere_center_in_world.shape[0],1), dtype=np.float32)))
-    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*3
-    p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
+    # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*3
+    # p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
     radius = np.array([obstacle_config["radius"]]*len(sphere_center_in_world), dtype=np.float32)
     CBFs = []
     for i in range(len(sphere_center_in_world)):
