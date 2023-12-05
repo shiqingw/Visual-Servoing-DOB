@@ -1,15 +1,15 @@
 {
     "image_save_format": "png",
     "record": 0,
-    "save_screeshot": 1,
-    "save_rgb": 1,
+    "save_screeshot": 0,
+    "save_rgb": 0,
     "save_depth": 0,
     "save_detection": 0,
     "save_scaling_function": 0,
     "visualize_target_traj": 0,
     "visualize_camera_traj": 0,
-    "visualize_target_traj_from_last": 1,
-    "visualize_camera_traj_from_last": 1,
+    "visualize_target_traj_from_last": 0,
+    "visualize_camera_traj_from_last": 0,
     "zero_vel": 0,
     "horizon": 3000,
     "wait_ekf": 0,
@@ -88,11 +88,11 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 100,
-        "solver_args": {"solve_method": "ECOS", "max_iters": 2000}
+        "solver_args": {"solve_method": "ECOS", "max_iters": 1000}
     },
 
     "CBF_config":{
-        "active": 0,
+        "active": 1,
         "cbf_value_record": 1,
         "threshold_ub": 800,
         "threshold_lb": 100,

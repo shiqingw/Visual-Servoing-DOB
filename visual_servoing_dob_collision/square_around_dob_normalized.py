@@ -157,6 +157,7 @@ def main():
     vels = np.zeros((num_data,9), dtype = np.float32)
     joint_values = np.zeros((num_data,9), dtype = np.float32)
     cvxpylayer_computation_time = np.zeros(num_data, dtype = np.float32)
+    cbf_computation_time = np.zeros(num_data, dtype = np.float32)
     cbf_value = np.zeros(num_data, dtype = np.float32)
     target_center = np.zeros((num_data,3), dtype = np.float32)
     camera_position = np.zeros((num_data,3), dtype = np.float32)
@@ -471,6 +472,7 @@ def main():
             obstacle_corners_normalized = obstacle_corner_in_cam[:,0:2]/obstacle_corner_in_cam[:,2][:,np.newaxis]
 
             if CBF_config["active"] == 1:
+                time_cbf_start = time.time()
                 # Construct CBF and its constraint
                 target_coords = torch.tensor(corners_raw_normalized, dtype=torch.float32, requires_grad=True)
                 x_target = target_coords[:,0]
@@ -497,7 +499,7 @@ def main():
                                                   solver_args=optimization_config["solver_args"])
                     CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
                     # print(alpha_sol, p_sol)
-                    print(CBF)
+                    # print(CBF)
                     alpha_sol.backward()
                     time2 = time.time()
                     cvxpylayer_computation_time[i//step_every] = time2-time1
@@ -529,12 +531,14 @@ def main():
                     g = -speeds_in_cam_desired
                     cbf_qp.update(g=g, C=A_CBF, l=lb_CBF)
                     cbf_qp.solve()
-
+                    time_cbf_end = time.time()
+                    cbf_computation_time[i//step_every] = time_cbf_end - time_cbf_start
                     speeds_in_cam = cbf_qp.results.x
                 else: 
                     speeds_in_cam = speeds_in_cam_desired
                     print("CBF skipped")
                     cvxpylayer_computation_time[i//step_every] = None
+                    cbf_computation_time[i//step_every] = None
                     cbf_value[i//step_every] = None
             else: 
                 speeds_in_cam = speeds_in_cam_desired
@@ -573,6 +577,7 @@ def main():
                     else:
                         print("CBF value skipped")
                         cvxpylayer_computation_time[i//step_every] = None
+                        cbf_computation_time[i//step_every] = None
                         cbf_value[i//step_every] = None
 
             # print(speeds_in_cam)
@@ -719,6 +724,7 @@ def main():
             'joint_vels': vels,
             'joint_values': joint_values,
             'cvxpylayer_computation_time': cvxpylayer_computation_time,
+            'cbf_computation_time': cbf_computation_time,
             'cbf_value': cbf_value,
             'stop_ind': i//step_every,
             'target_center': target_center,
@@ -774,14 +780,21 @@ def main():
     plt.plot(times, cvxpylayer_computation_time, label="cvxpylayer_computation_time")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'cvxpylayer_computation_time.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_cvxpylayer_computation_time.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, cbf_computation_time, label="cbf_computation_time")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'plot_cbf_computation_time.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
     plt.plot(times, cbf_value, label="cbf_value")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'cbf_value.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_cbf_value.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)

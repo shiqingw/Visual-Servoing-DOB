@@ -164,6 +164,7 @@ def main():
     d_true_z_values = np.zeros((num_data,4), dtype = np.float32)
     corners_values = np.zeros((num_data,4,2), dtype = np.float32)
     depth_values = np.zeros((num_data,4), dtype = np.float32)
+    cbf_computation_time = np.zeros(num_data, dtype = np.float32)
 
     # Obstacle
     obstacle_config = test_settings["obstacle_config"]
@@ -470,7 +471,7 @@ def main():
 
             if CBF_config["active"] == 1:
                 # Construct CBF and its constraint
-
+                time1 = time.time()
                 A_CBF = np.zeros((len(sphere_center_in_world)*4, 6), dtype=np.float32)
                 lb_CBF = np.zeros(len(sphere_center_in_world)*4, dtype=np.float32)
                 cbf_counter = 0
@@ -499,11 +500,13 @@ def main():
                 g_cbf_qp = -speeds_in_cam_desired
                 cbf_qp.update(H=H_cbf_qp, g=g_cbf_qp, C=A_CBF, l=lb_CBF)
                 cbf_qp.solve()
-
+                time2 = time.time()
+                cbf_computation_time[i//step_every] = time2-time1
                 speeds_in_cam = cbf_qp.results.x
 
             else: 
                 speeds_in_cam = speeds_in_cam_desired
+                cbf_computation_time[i//step_every] = None
             if CBF_config["cbf_value_record"] == 1:
                 cbf_values[i//step_every,:] = all_cbf_values
             print(np.min(all_cbf_values))
@@ -655,6 +658,7 @@ def main():
             'joint_vels': vels,
             'joint_values': joint_values,
             'cbf_values': cbf_values,
+            'cbf_computation_time': cbf_computation_time,
             'stop_ind': i//step_every,
             'target_center': target_center,
             'camera_position': camera_position,
@@ -706,10 +710,17 @@ def main():
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
+    plt.plot(times, cbf_computation_time, label="cbf_computation_time")
+    plt.legend()
+    plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
+    plt.savefig(os.path.join(results_dir, 'plot_cbf_computation_time.png'))
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
     plt.plot(times, cbf_values, label="cbf_value")
     plt.legend()
     plt.axhline(y = 0.0, color = 'black', linestyle = 'dotted')
-    plt.savefig(os.path.join(results_dir, 'cbf_value.png'))
+    plt.savefig(os.path.join(results_dir, 'plot_cbf_value.png'))
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=config.figsize, dpi=config.dpi, frameon=True)
