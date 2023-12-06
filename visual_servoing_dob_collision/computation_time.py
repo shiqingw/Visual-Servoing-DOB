@@ -21,8 +21,8 @@ if __name__ == '__main__':
         stop_ind = summary["stop_ind"]
 
         # Print mean and std of computation time
-        print("Mean computation time: {}".format(np.mean(cbf_computation_time[:stop_ind])))
-        print("Std computation time: {}".format(np.std(cbf_computation_time[:stop_ind])))
+        print("Mean CBF computation time: {}".format(np.mean(cbf_computation_time[:stop_ind])))
+        print("Std CBF computation time: {}".format(np.std(cbf_computation_time[:stop_ind])))
 
         print("Mean cvxpylayer computation time: {}".format(np.mean(cvxpylayer_computation_time[:stop_ind])))
         print("Std cvxpylayer computation time: {}".format(np.std(cvxpylayer_computation_time[:stop_ind])))
