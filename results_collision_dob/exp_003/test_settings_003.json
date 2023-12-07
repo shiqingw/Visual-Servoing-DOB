@@ -63,11 +63,9 @@
     },
 
     "obstacle_config":{
-        "lineFromXYZ": [0.8, -0.3, 0.25],
-        "lineToXYZ" : [0.8, 0.3, 0.25],
-        "lineColorRGB" : [0.0, 0.0, 1.0],
-        "lineWidth" : 10,
-        "lifeTime" : 0,
+        "center_position": [0.9, 0.0, 0.25],
+        "x_length": 0.2,
+        "y_width": 0.6,
         "obstacle_alpha": 1
     },
 
@@ -88,7 +86,7 @@
         "n_cons_obstacle": 4,
         "n_cons_target": 4,
         "exp_coef": 100,
-        "solver_args": {"solve_method": "ECOS", "max_iters": 1000}
+        "solver_args": {"solve_method": "ECOS", "max_iters": 2000}
     },
 
     "CBF_config":{

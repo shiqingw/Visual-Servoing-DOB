@@ -1,0 +1,124 @@
+{
+    "image_save_format": "png",
+    "record": 0,
+    "save_screeshot": 0,
+    "save_rgb": 0,
+    "save_depth": 0,
+    "save_detection": 0,
+    "save_scaling_function": 0,
+    "visualize_target_traj": 0,
+    "visualize_camera_traj": 0,
+    "visualize_target_traj_from_last": 0,
+    "visualize_camera_traj_from_last": 0,
+    "zero_vel": 0,
+    "horizon": 3000,
+    "wait_ekf": 0,
+    "step_every": 8,
+    "save_every": 24,
+    "initial_joint_angles": [0.0, -0.785, 0.0, -2.356, 0.0, 2, 0.785, 0.001, 0.001],
+
+    "joint_limits_config":{
+        "lb":[-2.3093, -1.5133, -2.4937, -2.7478, -2.48, 0.8521, -2.6895, 0, 0],
+        "ub":[2.3093, 1.5133, 2.4937, -0.4461, 2.48, 4.2094, 2.6895, 0.04, 0.04]
+    },
+
+    "simulator_config":{
+        "enable_gui_camera_data": 0,
+        "obs_urdf": "box_big.urdf",
+        "cameraDistance": 1.03,
+        "cameraYaw": 0,
+        "cameraPitch":-30,
+        "lookat":[0.5, 0.0, 0.3],
+        "crude_type": "ellipsoid"
+    },
+
+    "screenshot_config":{
+        "cameraDistance": 0.8,
+        "cameraYaw": 0,
+        "cameraPitch":-30,
+        "lookat":[0.5, 0.0, 0.4],
+        "pixelWidth": 1280,
+        "pixelHeight": 720,
+        "nearPlane": 0.01,
+        "farPlane": 100,
+        "fov": 90
+    },
+
+    "camera_config":{
+        "width": 1280,
+        "height": 720,
+        "near": 0.02,
+        "far": 2.0,
+        "fov": 60,
+        "intrinsic_matrix": [[631.989,0,640.510],[0,631.422,365.195],[0,0,1]]
+    },
+
+    "apriltag_config":{
+        "tag_size": 0.135,
+        "apriltag_radius": 0.15,
+        "initial_position": [0.7, 0.0, 0.005],
+        "center_position": [0.85, 0.0, 0.005],
+        "augular_velocity": 0.5,
+        "offset_angle": 3.14
+    },
+
+    "obstacle_config":{
+        "center_position": [1.5, 0.0, 0.25],
+        "x_length": 1.2,
+        "y_width": 1.2,
+        "obstacle_alpha": 1
+    },
+
+    "controller_config":{
+        "num_points": 4,
+        "mean_gain": [1.0,1.0],
+        "variance_gain": [1,1],
+        "variance_target": [4500, 4500],
+        "horizontal_gain": 0.0,
+        "vertical_gain": 0.0,
+        "joint_limit_gain": 1,
+        "distance_gain":1,
+        "depth_target": 0.7,
+        "fix_position_gain": 1
+    },
+
+    "optimization_config":{
+        "n_cons_obstacle": 4,
+        "n_cons_target": 4,
+        "exp_coef": 75,
+        "solver_args": {"solve_method": "ECOS", "max_iters": 2000}
+    },
+
+    "CBF_config":{
+        "active": 1,
+        "cbf_value_record": 1,
+        "threshold_ub": 800,
+        "threshold_lb": 100,
+        "barrier_alpha": 1,
+        "scaling_lb": 1.03,
+        "compensation": 0.01
+    },
+
+    "collision_cbf_config":{
+        "active": 0,
+        "cbf_value_record": 1,
+        "barrier_gamma": 5,
+        "alpha_offset": 1.03
+    },
+
+    "observer_config":{
+        "active": 1,
+        "active_for_cbf": 1,
+        "gain": [2,2],
+        "num_points": 4
+    },
+
+    "ekf_config":{
+        "active": 1,
+        "active_for_cbf": 0,
+        "P0_unnormalized": [1, 1, 2.5e-5, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4],
+        "Q": [1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1, 1, 1e-2],
+        "R_unnormalized": [1, 1, 2.5e-5],
+        "depth_measurement_var": 2.5e-5
+    }
+}

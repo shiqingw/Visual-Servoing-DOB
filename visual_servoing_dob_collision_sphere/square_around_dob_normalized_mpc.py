@@ -187,7 +187,7 @@ def main():
     # p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Sphere obstacles
-    sphere_center_in_world = np.array(obstacle_config["sphere_center"], dtype=np.float32)
+    sphere_center_in_world = np.array(obstacle_config["sphere_centers"], dtype=np.float32)
     if "rotate_by" in obstacle_config:
         theta = obstacle_config["rotate_by"]
         r = R.from_euler('z', theta, degrees=False)

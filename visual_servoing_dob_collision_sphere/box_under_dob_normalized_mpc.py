@@ -44,7 +44,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=1, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=3, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -159,31 +159,28 @@ def main():
     depth_values = np.zeros((num_data,4), dtype = np.float32)
     cbf_computation_time = np.zeros(num_data, dtype = np.float32)
 
-    # Obstacle line
+    # Obstacle
     obstacle_config = test_settings["obstacle_config"]
-    # p.addUserDebugLine(lineFromXYZ = obstacle_config["lineFromXYZ"],
-    #                    lineToXYZ = obstacle_config["lineToXYZ"],
-    #                    lineColorRGB = obstacle_config["lineColorRGB"],
-    #                    lineWidth = obstacle_config["lineWidth"],
-    #                    lifeTime = obstacle_config["lifeTime"])
-    obstacle_corner_in_world = np.array([np.array(obstacle_config["lineFromXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"]),
-                                         np.array(obstacle_config["lineToXYZ"])+[0.2,0,0],
-                                         np.array(obstacle_config["lineFromXYZ"])+[0.2,0,0]], dtype=np.float32)
+    obstacle_corner_in_world = np.array([[-1,-1],
+                                         [-1,1],
+                                         [1,1],
+                                         [1,-1]], dtype=np.float32)*(obstacle_config["x_length"]/2.0, obstacle_config["y_width"]/2.0)
+    obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.zeros((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
+    obstacle_corner_in_world = obstacle_corner_in_world + np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_corner_in_world = np.hstack((obstacle_corner_in_world, np.ones((obstacle_corner_in_world.shape[0],1), dtype=np.float32)))
     
     obstacle_quat = p.getQuaternionFromEuler([0, 0, 0])
-    obstacle_pos = np.array([0.1,0,0]) + (np.array(obstacle_config["lineFromXYZ"]) + np.array(obstacle_config["lineToXYZ"]))/2.0
+    obstacle_pos =  np.array(obstacle_config["center_position"], dtype=np.float32)
     obstacle_pos[-1] = 0
     p.resetBasePositionAndOrientation(obstacle_ID, obstacle_pos, obstacle_quat)
     p.changeVisualShape(obstacle_ID, -1, rgbaColor=[1., 0.87, 0.68, obstacle_config["obstacle_alpha"]])
 
     # Sphere obstacles
-    sphere_center_in_world = np.array(obstacle_config["sphere_center"], dtype=np.float32)
+    sphere_center_in_world = np.array(obstacle_config["sphere_centers"], dtype=np.float32)
     sphere_center_in_world = sphere_center_in_world + obstacle_pos
     sphere_center_in_world = np.hstack((sphere_center_in_world, np.ones((sphere_center_in_world.shape[0],1), dtype=np.float32)))
-    # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*3
-    # p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
+    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*100
+    p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
     radius = np.array([obstacle_config["radius"]]*len(sphere_center_in_world), dtype=np.float32)
     CBFs = []
     for i in range(len(sphere_center_in_world)):

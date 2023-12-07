@@ -10,7 +10,7 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    exp_names = ['exp_002']
+    exp_names = ['exp_003']
 
     for i in range(len(exp_names)):
         exp_name = exp_names[i]
