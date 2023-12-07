@@ -105,14 +105,15 @@ def write_spheres(file, width, length, sphere_per_unit):
     file.write(data)
     return positions
 
-def write_joints(file):
+def write_joints(file, sphere=False):
     data = f"""
     <joint name="fixed_joint" type="fixed">
         <parent link="link1"/>
         <child link="link2"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-    </joint>
-
+    </joint>\n"""
+    if sphere:
+        data += f"""
     <joint name="fixed_joint2" type="fixed">
         <parent link="link1"/>
         <child link="link3"/>
@@ -122,8 +123,8 @@ def write_joints(file):
     file.write(data)
 
 #################################################
-width = 1.2
-length = 1.2
+width = 1.0
+length = 1.0
 sphere_per_unit = 10
 
 filename = "box_big_with_{:d}_spheres.urdf".format(int(width*length*sphere_per_unit**2))
@@ -133,7 +134,16 @@ with open(filename, 'w') as file:
     write_box(file, width, length)
     write_legs(file, width, length)
     sphere_positions = write_spheres(file, width, length, sphere_per_unit)
-    write_joints(file)
+    write_joints(file, sphere=True)
+    write_footer(file)
+
+filename = "box_big_wo_{:d}_spheres.urdf".format(int(width*length*sphere_per_unit**2))
+filename = os.path.join(str(Path(__file__).parent), filename)
+with open(filename, 'w') as file:
+    write_header(file)
+    write_box(file, width, length)
+    write_legs(file, width, length)
+    write_joints(file, sphere=False)
     write_footer(file)
 
 # Save sphere positions as json

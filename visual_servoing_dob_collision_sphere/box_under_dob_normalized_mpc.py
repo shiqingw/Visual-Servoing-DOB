@@ -179,8 +179,8 @@ def main():
     sphere_center_in_world = np.array(obstacle_config["sphere_centers"], dtype=np.float32)
     sphere_center_in_world = sphere_center_in_world + obstacle_pos
     sphere_center_in_world = np.hstack((sphere_center_in_world, np.ones((sphere_center_in_world.shape[0],1), dtype=np.float32)))
-    colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*100
-    p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
+    # colors = [[0.5,0.5,0.5],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]*100
+    # p.addUserDebugPoints(sphere_center_in_world[:,0:3], colors[0:len(sphere_center_in_world)], pointSize=5, lifeTime=0.01)
     radius = np.array([obstacle_config["radius"]]*len(sphere_center_in_world), dtype=np.float32)
     CBFs = []
     for i in range(len(sphere_center_in_world)):

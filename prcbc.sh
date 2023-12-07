@@ -1,0 +1,60 @@
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 3
+mv results_collision_dob_sphere/exp_003 results_collision_dob_sphere/exp_003_1
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 3
+mv results_collision_dob_sphere/exp_003 results_collision_dob_sphere/exp_003_2
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 3
+mv results_collision_dob_sphere/exp_003 results_collision_dob_sphere/exp_003_3
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 3
+mv results_collision_dob_sphere/exp_003 results_collision_dob_sphere/exp_003_4
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 3
+mv results_collision_dob_sphere/exp_003 results_collision_dob_sphere/exp_003_5
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 4
+mv results_collision_dob_sphere/exp_004 results_collision_dob_sphere/exp_004_1
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 4
+mv results_collision_dob_sphere/exp_004 results_collision_dob_sphere/exp_004_2
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 4
+mv results_collision_dob_sphere/exp_004 results_collision_dob_sphere/exp_004_3
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 4
+mv results_collision_dob_sphere/exp_004 results_collision_dob_sphere/exp_004_4
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 4
+mv results_collision_dob_sphere/exp_004 results_collision_dob_sphere/exp_004_5
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 5
+mv results_collision_dob_sphere/exp_005 results_collision_dob_sphere/exp_005_1
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 5
+mv results_collision_dob_sphere/exp_005 results_collision_dob_sphere/exp_005_2
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 5
+mv results_collision_dob_sphere/exp_005 results_collision_dob_sphere/exp_005_3
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 5
+mv results_collision_dob_sphere/exp_005 results_collision_dob_sphere/exp_005_4
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 5
+mv results_collision_dob_sphere/exp_005 results_collision_dob_sphere/exp_005_5
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 6
+mv results_collision_dob_sphere/exp_006 results_collision_dob_sphere/exp_006_1
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 6
+mv results_collision_dob_sphere/exp_006 results_collision_dob_sphere/exp_006_2
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 6
+mv results_collision_dob_sphere/exp_006 results_collision_dob_sphere/exp_006_3
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 6
+mv results_collision_dob_sphere/exp_006 results_collision_dob_sphere/exp_006_4
+
+python visual_servoing_dob_collision_sphere/box_under_dob_normalized_mpc.py --exp_num 6
+mv results_collision_dob_sphere/exp_006 results_collision_dob_sphere/exp_006_5
+

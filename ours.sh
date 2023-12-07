@@ -1,0 +1,60 @@
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 5
+mv results_collision_dob/exp_005 results_collision_dob/exp_005_1
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 5
+mv results_collision_dob/exp_005 results_collision_dob/exp_005_2
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 5
+mv results_collision_dob/exp_005 results_collision_dob/exp_005_3
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 5
+mv results_collision_dob/exp_005 results_collision_dob/exp_005_4
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 5
+mv results_collision_dob/exp_005 results_collision_dob/exp_005_5
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 6
+mv results_collision_dob/exp_006 results_collision_dob/exp_006_1
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 6
+mv results_collision_dob/exp_006 results_collision_dob/exp_006_2
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 6
+mv results_collision_dob/exp_006 results_collision_dob/exp_006_3
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 6
+mv results_collision_dob/exp_006 results_collision_dob/exp_006_4
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 6
+mv results_collision_dob/exp_006 results_collision_dob/exp_006_5
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 7
+mv results_collision_dob/exp_007 results_collision_dob/exp_007_1
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 7
+mv results_collision_dob/exp_007 results_collision_dob/exp_007_2
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 7
+mv results_collision_dob/exp_007 results_collision_dob/exp_007_3
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 7
+mv results_collision_dob/exp_007 results_collision_dob/exp_007_4
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 7
+mv results_collision_dob/exp_007 results_collision_dob/exp_007_5
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 8
+mv results_collision_dob/exp_008 results_collision_dob/exp_008_1
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 8
+mv results_collision_dob/exp_008 results_collision_dob/exp_008_2
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 8
+mv results_collision_dob/exp_008 results_collision_dob/exp_008_3
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 8
+mv results_collision_dob/exp_008 results_collision_dob/exp_008_4
+
+python visual_servoing_dob_collision/box_under_dob_normalized.py --exp_num 8
+mv results_collision_dob/exp_008 results_collision_dob/exp_008_5
+
