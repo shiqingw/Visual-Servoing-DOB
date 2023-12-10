@@ -25,6 +25,7 @@
     "simulator_config":{
         "enable_gui_camera_data": 0,
         "obs_urdf": "box_big_wo_100_spheres.urdf",
+        "apriltag_urdf": "apriltag_id0_square.urdf",
         "cameraDistance": 1.03,
         "cameraYaw": 0,
         "cameraPitch":-30,

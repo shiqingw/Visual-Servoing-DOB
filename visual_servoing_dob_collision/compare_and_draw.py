@@ -10,9 +10,13 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    exp_names = ['exp_003_w_cbf','exp_003_wo_cbf']
+    # exp_names = ['exp_003_w_cbf','exp_003_wo_cbf']
     # exp_names = ['exp_004_w_cbf','exp_004_wo_cbf']
-    labels = ['w/ CBF', 'w/o CBF']
+    # exp_names = ['exp_009_close','exp_010_far']
+    exp_names = ['exp_011_close','exp_012_far']
+    # labels = ['w/ CBF', 'w/o CBF']
+    # labels = ['target depth: 0.52 m', 'target depth: 0.72 m']
+    labels = ['target depth: 0.60 m', 'target depth: 0.80 m']
     linestyles = ['-', '--']
     label_fs = 35
     tick_fs = 30

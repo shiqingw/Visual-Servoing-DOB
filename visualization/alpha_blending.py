@@ -1,18 +1,24 @@
 import cv2
 import numpy as np
-  
-img1 = cv2.imread('results_dob/exp_002/rgb_0000.png')
-img2 = cv2.imread('results_dob/exp_002/scaling_functions_0000.png')
+import os
 
-ind = np.where(img2 >1)
-img2[ind] = img1[ind]
+results_path = "results_collision_dob/"
+exp_num = "exp_013_keep"
+image_folder = results_path + exp_num
 
-# img2 = cv2.resize(img2, img1.shape[1::-1])
+images = [img for img in os.listdir(image_folder) if img.startswith("scaling") and img.endswith(".png")]
+images.sort()
 
 alpha = 0.5
 
-dst = cv2.addWeighted(img1, alpha , img2, 1-alpha, 0)
+for i in range(len(images)):
+    img_scaling = cv2.imread(os.path.join(image_folder, images[i]))
+    num = images[i].split("_")[-1].split(".")[0]
+    img_rgb = cv2.imread(os.path.join(image_folder, "rgb_" + num + ".png"))
+    ind = np.where(img_scaling >1)
+    img_scaling[ind] = img_rgb[ind]
+    dst = cv2.addWeighted(img_rgb, alpha , img_scaling, 1-alpha, 0)
+    cv2.imwrite(os.path.join(image_folder, "blending_" + num + ".png"), dst)
 
-cv2.imwrite('alpha_mask_.png', dst)
 
   

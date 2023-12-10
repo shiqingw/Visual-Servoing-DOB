@@ -44,7 +44,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=6, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=9, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -91,6 +91,7 @@ def main():
     # Create and reset simulation
     enable_gui_camera_data = simulator_config["enable_gui_camera_data"]
     obs_urdf = simulator_config["obs_urdf"]
+    apriltag_urdf = simulator_config["apriltag_urdf"]
     cameraDistance = simulator_config["cameraDistance"]
     cameraYaw = simulator_config["cameraYaw"]
     cameraPitch = simulator_config["cameraPitch"]
@@ -105,7 +106,7 @@ def main():
                                      record_path=None, crude_type=crude_type)
     
     obstacle_ID = p.loadURDF(obs_urdf, useFixedBase=True)
-    april_tag_ID = p.loadURDF("apriltag_id0_square.urdf", useFixedBase=True)
+    april_tag_ID = p.loadURDF(apriltag_urdf, useFixedBase=True)
     
     info = env.reset(cameraDistance = cameraDistance,
                      cameraYaw = cameraYaw,

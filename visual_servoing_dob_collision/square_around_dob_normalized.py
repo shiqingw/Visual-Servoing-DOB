@@ -45,7 +45,7 @@ from ekf.ekf_ibvs_normalized import EKF_IBVS
 
 def main():
     parser = argparse.ArgumentParser(description="Visual servoing")
-    parser.add_argument('--exp_num', default=4, type=int, help="test case number")
+    parser.add_argument('--exp_num', default=11, type=int, help="test case number")
 
     # Set random seed
     seed_num = 0
@@ -499,7 +499,7 @@ def main():
                                                   solver_args=optimization_config["solver_args"])
                     CBF = alpha_sol.detach().numpy().item() - CBF_config["scaling_lb"]
                     # print(alpha_sol, p_sol)
-                    # print(CBF)
+                    print(CBF)
                     alpha_sol.backward()
                     time2 = time.time()
                     cvxpylayer_computation_time[i//step_every] = time2-time1
@@ -653,7 +653,7 @@ def main():
 
                 cv2.imwrite(results_dir+'/detect_'+'{:04d}.{}'.format(i, test_settings["image_save_format"]), img)
                 
-            if test_settings["save_scaling_function"] == 1 and i % save_every == 0:
+            if test_settings["save_scaling_function"] == 1 and i % (10*save_every) == 0:
                 blank_img = np.ones_like(img)*255
 
                 A_target_val = A_target_val.detach().numpy()
