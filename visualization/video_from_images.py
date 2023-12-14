@@ -32,12 +32,13 @@ def create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to):
     video.release()
 
 if __name__ == "__main__":
-    # image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_collision_dob/exp_004_wo_cbf'
-    image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_collision_dob_sphere/exp_002_w_spheres'
+    image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_collision_dob/exp_013_keep'
+    # image_folder = '/Users/shiqing/Desktop/Visual-Servoing-DOB/results_collision_dob_sphere/exp_002_w_spheres'
+    # image_prefix = 'blending'  # Images should start with this prefix
     # image_prefix = 'screenshot'  # Images should start with this prefix
     image_prefix = 'rgb'  # Images should start with this prefix
     video_name = image_folder + '/' + image_prefix + '_video.mp4'
     frame_rate = 10
-    repeat_to = 130
+    repeat_to = 0
 
     create_video(image_folder, image_prefix, video_name, frame_rate, repeat_to)
