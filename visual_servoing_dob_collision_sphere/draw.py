@@ -10,8 +10,8 @@ from utils.dict_utils import load_dict
 
 
 if __name__ == '__main__':
-    exp_names = ['exp_001_wo_spheres']
-    # exp_names = ['exp_002_wo_spheres']
+    # exp_names = ['exp_001_wo_spheres']
+    exp_names = ['exp_002_wo_spheres']
     labels = ['PrCBC']
     linestyles = ['-']
     label_fs = 35
@@ -23,6 +23,7 @@ if __name__ == '__main__':
     print("==> Plot cbf ...")
     fig, ax = plt.subplots(figsize=(12,9), dpi=100, frameon=True)
     plt.rcParams.update({"text.usetex": True})
+    plt.rcParams.update({'pdf.fonttype': 42})
 
     for i in range(len(exp_names)):
         exp_name = exp_names[i]
